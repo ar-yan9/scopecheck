@@ -63,10 +63,11 @@ def test_real_local_scan_and_header_observation(lab):
     assert row['http']['version_hints'][0]['kind']=='possible_version_match'
     assert result['summary']['open']==1
 
-def test_closed_port():
+def test_bound_nonlistening_port_never_reported_open():
     sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
-    # Bound but not listening, no other process can claim it during the check.
-    try:assert scanner.tcp_probe('127.0.0.1',port,.3,scanner.RateGate(10))['state']=='closed'
+    # Windows may silently drop this connection; Linux usually refuses it.
+    # Preserve the observed distinction, never manufacture a closed verdict.
+    try:assert scanner.tcp_probe('127.0.0.1',port,.3,scanner.RateGate(10))['state'] in {'closed','timeout'}
     finally:sock.close()
 
 def test_no_insecure_tls_fallback(monkeypatch):
@@ -147,3 +148,11 @@ def test_real_tls_certificate_and_https_on_owned_local_fixture(tmp_path,monkeypa
         assert 'strict-transport-security' in response['missing_headers']
     finally:
         server.shutdown();thread.join();server.server_close()
+
+
+@pytest.mark.parametrize('error,expected',[(ConnectionRefusedError(), 'closed'), (TimeoutError(), 'timeout')])
+def test_refused_and_timeout_keep_distinct_states(monkeypatch,error,expected):
+    def fail(*args,**kwargs):
+        raise error
+    monkeypatch.setattr(scanner.socket,'create_connection',fail)
+    assert scanner.tcp_probe('127.0.0.1',22,.3,scanner.RateGate(10))['state']==expected
