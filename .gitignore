@@ -6,3 +6,5 @@ frontend/dist/
 *report*.json
 *.pem
 .env
+
+local-data/
