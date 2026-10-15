@@ -1,17 +1,807 @@
-import React,{useEffect,useRef,useState} from 'react';
-import './style.css';
-async function api(path,body){const r=await fetch('/api/'+path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Invalid request');return data}
-export function App(){
- const [form,setForm]=useState({target:'127.0.0.1',ports:'common100',scope:'',authorized:false,automatic:true,passive_unknown:false,http_ports:'',tls_ports:'',banner_ports:'',rate:50,workers:32,timeout:1});
- const [local,setLocal]=useState(['127.0.0.1','::1']),[job,setJob]=useState(null),[busy,setBusy]=useState(false),[result,setResult]=useState(null),[error,setError]=useState(''),[history,setHistory]=useState([]),[filter,setFilter]=useState('open'),[search,setSearch]=useState(''),[page,setPage]=useState(0),[detail,setDetail]=useState(null);const timer=useRef(null);
- const refresh=()=>api('history').then(x=>setHistory(x.reports)).catch(()=>{});
- useEffect(()=>{api('local-addresses').then(x=>setLocal(x.addresses)).catch(()=>{});refresh();api('health').then(x=>{if(x.active_job){setJob({id:x.active_job,status:'running'});setBusy(true)}}).catch(()=>{});return()=>clearTimeout(timer.current)},[]);
- useEffect(()=>{if(!job?.id||!busy)return;let disposed=false;async function poll(){try{const data=await api('jobs/'+job.id);if(disposed)return;setJob(data);if(['completed','cancelled','failed'].includes(data.status)){if(data.status==='failed')setError(data.error||'Scan failed');else{const report=await api('jobs/'+job.id+'/report');if(!disposed){setResult(report);setPage(0)}}if(!disposed)setBusy(false);refresh();return}}catch(e){if(!disposed){setError(e.message);setBusy(false)}return}timer.current=setTimeout(poll,1000)}poll();return()=>{disposed=true;clearTimeout(timer.current)}},[job?.id,busy]);
- function change(e){const {name,type,value,checked}=e.target;setForm(x=>({...x,[name]:type==='checkbox'?checked:type==='number'?Number(value):value}))}
- async function run(e){e.preventDefault();setError('');setResult(null);setDetail(null);try{const data=await api('jobs',{...form,scope:form.scope.split(',').map(x=>x.trim()).filter(Boolean)});setJob(data);setBusy(true)}catch(e){setError(e.message)}}
- async function openHistory(id){try{const r=await api('jobs/'+id+'/report');setResult(r);setJob({id,status:r.status});setPage(0);setDetail(null)}catch(e){setError(e.message)}}
- function download(value,type,name){const u=URL.createObjectURL(new Blob([value],{type}));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
- async function htmlReport(){try{const r=await fetch('/api/jobs/'+job.id+'/html');if(!r.ok)throw Error('Report not ready');download(await r.text(),'text/html','scopecheck-report.html')}catch(e){setError(e.message)}}
- const own=local.includes(form.target)||form.target==='localhost';const rows=(result?.results||[]).filter(r=>(filter==='all'||r.state===filter)&&(!search||[r.port,r.state,r.service?.name,r.http?.server_header,r.banner?.text].join(' ').toLowerCase().includes(search.toLowerCase())));const visible=rows.slice(page*50,page*50+50);const p=job?.progress;const pct=p?Math.min(100,100*p.completed/p.total):0;
- return <><header><a className="brand" href="#top"><span className="mark">⌗</span>ScopeCheck<span className="draft">v0.2 / LOCAL</span></a><span className="local"><i/> Evidence, not verdicts</span></header><main id="top"><div className="intro"><div className="eyebrow">DEFENSIVE SECURITY / ARYAN</div><h1>Every port. Clear evidence.<br/><span>Your machine. Your scope.</span></h1><p>Full-range TCP discovery, service-aware checks and reports you can inspect. Scanning does not exploit a system, but it can trigger alerts or disturb fragile services. Start slow.</p></div><div className="workspace"><section className="setup"><div className="section-head"><span className="number">01</span><div><h2>Choose your scope</h2><p>One target, up to 65,535 TCP ports.</p></div></div><form onSubmit={run}><label>Hostname or IP<input aria-label="Hostname or IP" name="target" value={form.target} onChange={change} required/></label><div className="local-chips"><span>Detected on this laptop</span>{local.map(ip=><button type="button" key={ip} onClick={()=>setForm(x=>({...x,target:ip}))}>{ip}</button>)}</div><label>Port preset<select aria-label="Port preset" value={['common100','first1000','all'].includes(form.ports)?form.ports:'custom'} onChange={e=>setForm(x=>({...x,ports:e.target.value==='custom'?'22,80,443':e.target.value}))}><option value="common100">Common 100 · curated</option><option value="first1000">Ports 1-1000 · numeric, not ranked</option><option value="all">All TCP · 1-65535</option><option value="custom">Custom ports / range</option></select></label>{!['common100','first1000','all'].includes(form.ports)&&<label>Custom TCP ports<input aria-label="Custom TCP ports" name="ports" value={form.ports} onChange={change} placeholder="1-65535 or 22,80,443,8899"/></label>}<p className="scope-status">{own?'Own-machine address: no authorization IP list needed.':'Other devices: confirm permission and enter the approved numeric scope. Hostnames resolving to your own interfaces are recognized by the backend.'}</p>{!own&&<><label>Authorized IPs / CIDRs<input aria-label="Authorized scope" name="scope" value={form.scope} onChange={change} placeholder="Approved IP/CIDR, comma-separated"/></label><label className="permission"><input name="authorized" type="checkbox" checked={form.authorized} onChange={change}/><span>I own the target or have written permission for this exact target, ports, rate and time window.</span></label></>}<label className="permission"><input name="automatic" type="checkbox" checked={form.automatic} onChange={change}/><span>Automatic service-aware checks on open ports. Known web/TLS ports get active checks; unknown services are not blindly probed.</span></label><details><summary>Rate & optional protocol overrides</summary><div className="advanced"><div className="rate-grid"><label>Connections/sec<input aria-label="Connections per second" type="number" name="rate" value={form.rate} min="0.2" max="200" step="0.2" onChange={change}/></label><label>Workers<input aria-label="Workers" type="number" name="workers" value={form.workers} min="1" max="128" onChange={change}/></label><label>Timeout (s)<input aria-label="Timeout" type="number" name="timeout" value={form.timeout} min="0.1" max="5" step="0.1" onChange={change}/></label></div><p>Own machine: max 200 connections/sec, 128 workers. Other targets: max 25/sec, 16 workers; use lower limits if required by permission. At 50/sec, all ports need at least ~22 minutes before extra checks. Timeouts can make it longer.</p><label>Explicit HTTP ports<input name="http_ports" value={form.http_ports} onChange={change}/></label><label>Explicit TLS ports<input name="tls_ports" value={form.tls_ports} onChange={change}/></label><label>Explicit passive banner ports<input name="banner_ports" value={form.banner_ports} onChange={change}/></label><p>Overrides outside the selected TCP list are ignored with a report note, never a validation crash. HTTP + TLS same port = HTTPS. Only label a port as a protocol you are authorized to probe.</p><label className="permission"><input type="checkbox" name="passive_unknown" checked={form.passive_unknown} onChange={change}/><span>Also listen for greetings on unknown open ports (no application payload, up to 256 bytes).</span></label></div></details><button className="primary" disabled={busy} type="submit">{busy?'Scan in progress…':'Start scope check'}<span>↗</span></button><p className="rate">No exploit · No brute force · No UDP<br/>All checks share the rate limit.</p></form><details className="history"><summary>Local history ({history.length})</summary><div className="history-heading"><h3>Local history</h3><button type="button" onClick={async()=>{if(confirm('Delete saved local report history?')){await api('history/clear',{});refresh()}}}>Clear</button></div><p>Last 20 reports / 7 days, saved on this machine. Reports may contain private service data.</p>{history.map(h=><button className="history-row" key={h.id} disabled={busy} onClick={()=>openHistory(h.id)}><b>{h.target}</b><span>{h.status} · {h.summary.open} open</span><small>{h.created_utc.slice(0,19).replace('T',' ')} UTC</small></button>)}</details></section><section className="findings" aria-live="polite" aria-busy={busy}><div className="section-head"><span className="number">02</span><div><h2>Read the evidence</h2><p>Open ports and configuration observations, not confirmed vulnerabilities.</p></div></div>{error&&<div className="error" role="alert"><b>Check stopped</b><p>{error}</p></div>}{busy&&<div className="progress-panel"><div className="eyebrow">{p?.phase==='checks'?'SERVICE CHECKS':'TCP DISCOVERY'}</div><h3>{p?.completed||0} / {p?.total||job?.port_count||'?'} ports</h3><progress value={pct} max="100"/><p>{p?.open||0} open · {p?.elapsed_seconds||0}s elapsed{p?.phase==='checks'?` · ${p.checks_completed}/${p.checks_total} open-port checks`:''}</p><button className="outline" onClick={()=>api('jobs/'+job.id+'/cancel',{}).catch(e=>setError(e.message))}>Cancel scan</button><p>Cancellation is cooperative: in-flight sockets finish within timeout. Closing this tab does not stop the backend. Refreshing reconnects to the active scan.</p></div>}{!result&&!busy&&<div className="empty"><div className="empty-art"><i/><i/><i/><span>127.0.0.1</span></div><h3>See what is really listening.</h3><p>Select your laptop's detected IP, choose common ports or the full TCP range, then start. For the included HTTP fixture, use custom port 8899 and automatic checks.</p><code>py -3 demo_server.py</code><p className="muted">Only systems you own or have written permission for. No automatic network sweeps.</p></div>}{result&&<><div className="report-top"><div><span className="eyebrow">{result.status.toUpperCase()} / {result.scope.own_machine?'OWN MACHINE':'AUTHORIZED SCOPE'}</span><h3>{result.scope.target}</h3><p>Selected IP: <code>{result.scope.selected_address}</code></p></div><div className="exports"><button className="outline" onClick={()=>download(JSON.stringify(result,null,2),'application/json','scopecheck-report.json')}>JSON ↓</button><button className="outline" onClick={htmlReport}>HTML ↓</button><button className="outline" onClick={()=>window.open('/api/jobs/'+job.id+'/print','_blank','noopener,noreferrer')}>Print / PDF</button></div></div><div className="stats">{['open','closed','timeout','error'].map(k=><div key={k}><strong>{result.summary[k]}</strong><span>{k}</span></div>)}</div><div className="review-note">{result.coverage.completed}/{result.coverage.requested} ports observed. {result.coverage.unscanned} unscanned. {result.coverage.open_checks_pending} open ports with checks pending. Open does not mean vulnerable. Cancelled scans are incomplete.</div>{result.configuration.ignored_manual_ports.length>0&&<p className="ignored">Ignored optional ports outside this scan: {result.configuration.ignored_manual_ports.join(', ')}.</p>}<div className="result-tools"><label>State<select aria-label="Result state" value={filter} onChange={e=>{setFilter(e.target.value);setPage(0)}}>{['open','all','closed','timeout','error'].map(x=><option key={x}>{x}</option>)}</select></label><label>Search<input aria-label="Search results" value={search} onChange={e=>{setSearch(e.target.value);setPage(0)}} placeholder="Port, service, banner"/></label></div><div className="port-table"><div className="table-head"><span>PORT / TCP</span><span>STATE</span><span>SERVICE / BASIS</span><span/></div>{visible.map(r=><button className="table-row" key={r.port} onClick={()=>setDetail(detail===r.port?null:r.port)}><strong>{r.port}</strong><span className={'state '+r.state}>{r.state}</span><span>{r.service?.name||'Not checked'}<small>{r.service?.basis||'TCP connection observation'}</small></span><span>↗</span></button>)}</div>{rows.length===0&&<p>No matching port observations.</p>}<div className="pagination"><span>{rows.length} matching · page {page+1}/{Math.max(1,Math.ceil(rows.length/50))}</span><button disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><button disabled={(page+1)*50>=rows.length} onClick={()=>setPage(page+1)}>Next</button></div>{detail!==null&&(()=>{const r=result.results.find(x=>x.port===detail);return <article className="port"><div className="port-top"><h4><span>{r.port}</span> / TCP</h4><b className={'state '+r.state}>{r.state}</b><button className="close-detail" onClick={()=>setDetail(null)}>Close</button></div><div className="observation">{r.check_note&&<p>{r.check_note}</p>}{r.http&&<><h5>HTTP / configuration</h5><p>{r.http.response_status||r.http.status}</p><p className="banner-text">{r.http.server_header}</p>{r.http.missing_headers?.length>0&&<><b className="review-label">REVIEW / MISSING HEADERS</b><ul>{r.http.missing_headers.map(x=><li key={x}>{x}</li>)}</ul></>}{r.http.cookies?.length>0&&<><h5>Cookie flags (values omitted)</h5>{r.http.cookies.map((c,i)=><p key={i}>{c.name}: Secure {String(c.secure)}, HttpOnly {String(c.httponly)}, SameSite {c.samesite||'not set'}</p>)}</>}{r.http.version_hints?.map((h,i)=><div className="hint" key={i}><strong>Possible version match, not confirmed</strong><p>{h.product} {h.reported_version}: {h.advisories.join(', ')}</p><p>{h.note}</p><a href={h.source} target="_blank" rel="noreferrer">Official advisory ↗</a></div>)}<p className="muted">{r.http.note}</p></>}{r.tls&&<><h5>TLS / certificate</h5><p>{r.tls.status} · {r.tls.protocol||'no verified protocol'}</p><p>{r.tls.reason||r.tls.error}</p>{r.tls.days_remaining!=null&&<p>{r.tls.days_remaining} days remaining · {r.tls.expiry_review}</p>}<p className="muted">{r.tls.note}</p></>}{r.banner&&<><h5>Greeting / passive observation</h5><p className="banner-text">{r.banner.text||r.banner.status}</p></>}<details><summary>Raw observation JSON</summary><pre>{JSON.stringify(r,null,2)}</pre></details></div></article>})()}<details className="limits"><summary>Scope & limitations</summary>{result.limits.map(x=><p key={x}>{x}</p>)}<p>Print / PDF opens the complete report in a new tab. Press Ctrl+P (Mac: Cmd+P), then Save as PDF. HTML reports are self-contained and escaped. JSON includes all observed states; the print report includes every open port, not just the filtered page.</p></details></>}</section></div><footer><span>ScopeCheck / Local-first security learning</span><span>Private reports stay on this machine unless you export/share them.</span></footer></main></>
+import React, { useEffect, useRef, useState } from "react";
+import "./style.css";
+async function api(path, body) {
+  const r = await fetch(
+    "/api/" + path,
+    body === undefined
+      ? {}
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+  );
+  const data = await r.json();
+  if (!r.ok)
+    throw Error(
+      typeof data.detail === "string" ? data.detail : "Invalid request",
+    );
+  return data;
+}
+export function App() {
+  const [form, setForm] = useState({
+    target: "127.0.0.1",
+    ports: "common100",
+    scope: "",
+    authorized: false,
+    automatic: true,
+    passive_unknown: false,
+    http_ports: "",
+    tls_ports: "",
+    banner_ports: "",
+    rate: 50,
+    workers: 32,
+    timeout: 1,
+  });
+  const [local, setLocal] = useState(["127.0.0.1", "::1"]),
+    [job, setJob] = useState(null),
+    [busy, setBusy] = useState(false),
+    [result, setResult] = useState(null),
+    [error, setError] = useState(""),
+    [history, setHistory] = useState([]),
+    [filter, setFilter] = useState("open"),
+    [search, setSearch] = useState(""),
+    [page, setPage] = useState(0),
+    [detail, setDetail] = useState(null);
+  const timer = useRef(null);
+  const refresh = () =>
+    api("history")
+      .then((x) => setHistory(x.reports))
+      .catch(() => {});
+  useEffect(() => {
+    api("local-addresses")
+      .then((x) => setLocal(x.addresses))
+      .catch(() => {});
+    refresh();
+    api("health")
+      .then((x) => {
+        if (x.active_job) {
+          setJob({ id: x.active_job, status: "running" });
+          setBusy(true);
+        }
+      })
+      .catch(() => {});
+    return () => clearTimeout(timer.current);
+  }, []);
+  useEffect(() => {
+    if (!job?.id || !busy) return;
+    let disposed = false;
+    async function poll() {
+      try {
+        const data = await api("jobs/" + job.id);
+        if (disposed) return;
+        setJob(data);
+        if (["completed", "cancelled", "failed"].includes(data.status)) {
+          if (data.status === "failed") setError(data.error || "Scan failed");
+          else {
+            const report = await api("jobs/" + job.id + "/report");
+            if (!disposed) {
+              setResult(report);
+              setPage(0);
+            }
+          }
+          if (!disposed) setBusy(false);
+          refresh();
+          return;
+        }
+      } catch (e) {
+        if (!disposed) {
+          setError(e.message);
+          setBusy(false);
+        }
+        return;
+      }
+      timer.current = setTimeout(poll, 1000);
+    }
+    poll();
+    return () => {
+      disposed = true;
+      clearTimeout(timer.current);
+    };
+  }, [job?.id, busy]);
+  function change(e) {
+    const { name, type, value, checked } = e.target;
+    setForm((x) => ({
+      ...x,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : type === "number"
+            ? Number(value)
+            : value,
+    }));
+  }
+  async function run(e) {
+    e.preventDefault();
+    if (busy) return;
+    setJob(null);
+    setBusy(true);
+    setError("");
+    setResult(null);
+    setDetail(null);
+    try {
+      const data = await api("jobs", {
+        ...form,
+        scope: form.scope
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+      });
+      setJob(data);
+    } catch (e) {
+      setBusy(false);
+      setError(e.message);
+    }
+  }
+  async function openHistory(id) {
+    try {
+      const r = await api("jobs/" + id + "/report");
+      setResult(r);
+      setJob({ id, status: r.status });
+      setPage(0);
+      setDetail(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  function download(value, type, name) {
+    const u = URL.createObjectURL(new Blob([value], { type }));
+    const a = document.createElement("a");
+    a.href = u;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(u), 1000);
+  }
+  async function htmlReport() {
+    try {
+      const r = await fetch("/api/jobs/" + job.id + "/html");
+      if (!r.ok) throw Error("Report not ready");
+      download(await r.text(), "text/html", "scopecheck-report.html");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  const own = local.includes(form.target) || form.target === "localhost";
+  const rows = (result?.results || []).filter(
+    (r) =>
+      (filter === "all" || r.state === filter) &&
+      (!search ||
+        [
+          r.port,
+          r.state,
+          r.service?.name,
+          r.http?.server_header,
+          r.banner?.text,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search.toLowerCase())),
+  );
+  const visible = rows.slice(page * 50, page * 50 + 50);
+  const p = job?.progress;
+  const pct = p ? Math.min(100, (100 * p.completed) / p.total) : 0;
+  return (
+    <>
+      <header>
+        <a className="brand" href="#top">
+          <span className="mark">⌗</span>ScopeCheck
+          <span className="draft">v0.2 / LOCAL</span>
+        </a>
+        <span className="local">
+          <i /> Evidence, not verdicts
+        </span>
+      </header>
+      <main id="top">
+        <div className="intro">
+          <div className="eyebrow">DEFENSIVE SECURITY / ARYAN</div>
+          <h1>
+            Every port. Clear evidence.
+            <br />
+            <span>Your machine. Your scope.</span>
+          </h1>
+          <p>
+            Full-range TCP discovery, service-aware checks and reports you can
+            inspect. Scanning does not exploit a system, but it can trigger
+            alerts or disturb fragile services. Start slow.
+          </p>
+        </div>
+        <div className="workspace">
+          <section className="setup">
+            <div className="section-head">
+              <span className="number">01</span>
+              <div>
+                <h2>Choose your scope</h2>
+                <p>One target, up to 65,535 TCP ports.</p>
+              </div>
+            </div>
+            <form onSubmit={run}>
+              <label>
+                Hostname or IP
+                <input
+                  aria-label="Hostname or IP"
+                  name="target"
+                  value={form.target}
+                  onChange={change}
+                  required
+                />
+              </label>
+              <div className="local-chips">
+                <span>Detected on this laptop</span>
+                {local.map((ip) => (
+                  <button
+                    type="button"
+                    key={ip}
+                    onClick={() => setForm((x) => ({ ...x, target: ip }))}
+                  >
+                    {ip}
+                  </button>
+                ))}
+              </div>
+              <label>
+                Port preset
+                <select
+                  aria-label="Port preset"
+                  value={
+                    ["common100", "first1000", "all"].includes(form.ports)
+                      ? form.ports
+                      : "custom"
+                  }
+                  onChange={(e) =>
+                    setForm((x) => ({
+                      ...x,
+                      ports:
+                        e.target.value === "custom"
+                          ? "22,80,443"
+                          : e.target.value,
+                    }))
+                  }
+                >
+                  <option value="common100">Common 100 · curated</option>
+                  <option value="first1000">
+                    Ports 1-1000 · numeric, not ranked
+                  </option>
+                  <option value="all">All TCP · 1-65535</option>
+                  <option value="custom">Custom ports / range</option>
+                </select>
+              </label>
+              {!["common100", "first1000", "all"].includes(form.ports) && (
+                <label>
+                  Custom TCP ports
+                  <input
+                    aria-label="Custom TCP ports"
+                    name="ports"
+                    value={form.ports}
+                    onChange={change}
+                    placeholder="1-65535 or 22,80,443,8899"
+                  />
+                </label>
+              )}
+              <p className="scope-status">
+                {own
+                  ? "Own-machine address: no authorization IP list needed."
+                  : "Other devices: confirm permission and enter the approved numeric scope. Hostnames resolving to your own interfaces are recognized by the backend."}
+              </p>
+              {!own && (
+                <>
+                  <label>
+                    Authorized IPs / CIDRs
+                    <input
+                      aria-label="Authorized scope"
+                      name="scope"
+                      value={form.scope}
+                      onChange={change}
+                      placeholder="Approved IP/CIDR, comma-separated"
+                    />
+                  </label>
+                  <label className="permission">
+                    <input
+                      name="authorized"
+                      type="checkbox"
+                      checked={form.authorized}
+                      onChange={change}
+                    />
+                    <span>
+                      I own the target or have written permission for this exact
+                      target, ports, rate and time window.
+                    </span>
+                  </label>
+                </>
+              )}
+              <label className="permission">
+                <input
+                  name="automatic"
+                  type="checkbox"
+                  checked={form.automatic}
+                  onChange={change}
+                />
+                <span>
+                  Automatic service-aware checks on open ports. Known web/TLS
+                  ports get active checks; unknown services are not blindly
+                  probed.
+                </span>
+              </label>
+              <details>
+                <summary>Rate & optional protocol overrides</summary>
+                <div className="advanced">
+                  <div className="rate-grid">
+                    <label>
+                      Connections/sec
+                      <input
+                        aria-label="Connections per second"
+                        type="number"
+                        name="rate"
+                        value={form.rate}
+                        min="0.2"
+                        max="200"
+                        step="0.2"
+                        onChange={change}
+                      />
+                    </label>
+                    <label>
+                      Workers
+                      <input
+                        aria-label="Workers"
+                        type="number"
+                        name="workers"
+                        value={form.workers}
+                        min="1"
+                        max="128"
+                        onChange={change}
+                      />
+                    </label>
+                    <label>
+                      Timeout (s)
+                      <input
+                        aria-label="Timeout"
+                        type="number"
+                        name="timeout"
+                        value={form.timeout}
+                        min="0.1"
+                        max="5"
+                        step="0.1"
+                        onChange={change}
+                      />
+                    </label>
+                  </div>
+                  <p>
+                    Own machine: max 200 connections/sec, 128 workers. Other
+                    targets: max 25/sec, 16 workers; use lower limits if
+                    required by permission. At 50/sec, all ports need at least
+                    ~22 minutes before extra checks. Timeouts can make it
+                    longer.
+                  </p>
+                  <label>
+                    Explicit HTTP ports
+                    <input
+                      name="http_ports"
+                      value={form.http_ports}
+                      onChange={change}
+                    />
+                  </label>
+                  <label>
+                    Explicit TLS ports
+                    <input
+                      name="tls_ports"
+                      value={form.tls_ports}
+                      onChange={change}
+                    />
+                  </label>
+                  <label>
+                    Explicit passive banner ports
+                    <input
+                      name="banner_ports"
+                      value={form.banner_ports}
+                      onChange={change}
+                    />
+                  </label>
+                  <p>
+                    Overrides outside the selected TCP list are ignored with a
+                    report note, never a validation crash. HTTP + TLS same port
+                    = HTTPS. Only label a port as a protocol you are authorized
+                    to probe.
+                  </p>
+                  <label className="permission">
+                    <input
+                      type="checkbox"
+                      name="passive_unknown"
+                      checked={form.passive_unknown}
+                      onChange={change}
+                    />
+                    <span>
+                      Also listen for greetings on unknown open ports (no
+                      application payload, up to 256 bytes).
+                    </span>
+                  </label>
+                </div>
+              </details>
+              <button className="primary" disabled={busy} type="submit">
+                {busy ? "Scan in progress…" : "Start scope check"}
+                <span>↗</span>
+              </button>
+              <p className="rate">
+                No exploit · No brute force · No UDP
+                <br />
+                All checks share the rate limit.
+              </p>
+            </form>
+            <details className="history">
+              <summary>Local history ({history.length})</summary>
+              <div className="history-heading">
+                <h3>Local history</h3>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("Delete saved local report history?")) {
+                      await api("history/clear", {});
+                      refresh();
+                    }
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+              <p>
+                Last 20 reports / 7 days, saved on this machine. Reports may
+                contain private service data.
+              </p>
+              {history.map((h) => (
+                <button
+                  className="history-row"
+                  key={h.id}
+                  disabled={busy}
+                  onClick={() => openHistory(h.id)}
+                >
+                  <b>{h.target}</b>
+                  <span>
+                    {h.status} · {h.summary.open} open
+                  </span>
+                  <small>
+                    {h.created_utc.slice(0, 19).replace("T", " ")} UTC
+                  </small>
+                </button>
+              ))}
+            </details>
+          </section>
+          <section className="findings" aria-live="polite" aria-busy={busy}>
+            <div className="section-head">
+              <span className="number">02</span>
+              <div>
+                <h2>Read the evidence</h2>
+                <p>
+                  Open ports and configuration observations, not confirmed
+                  vulnerabilities.
+                </p>
+              </div>
+            </div>
+            {error && (
+              <div className="error" role="alert">
+                <b>Check stopped</b>
+                <p>{error}</p>
+              </div>
+            )}
+            {busy && (
+              <div className="progress-panel">
+                <div className="eyebrow">
+                  {p?.phase === "checks" ? "SERVICE CHECKS" : "TCP DISCOVERY"}
+                </div>
+                <h3>
+                  {p?.completed || 0} / {p?.total || job?.port_count || "?"}{" "}
+                  ports
+                </h3>
+                <progress value={pct} max="100" />
+                <p>
+                  {p?.open || 0} open · {p?.elapsed_seconds || 0}s elapsed
+                  {p?.phase === "checks"
+                    ? ` · ${p.checks_completed}/${p.checks_total} open-port checks`
+                    : ""}
+                </p>
+                <button
+                  className="outline"
+                  onClick={() =>
+                    api("jobs/" + job.id + "/cancel", {}).catch((e) =>
+                      setError(e.message),
+                    )
+                  }
+                >
+                  Cancel scan
+                </button>
+                <p>
+                  Cancellation is cooperative: in-flight sockets finish within
+                  timeout. Closing this tab does not stop the backend.
+                  Refreshing reconnects to the active scan.
+                </p>
+              </div>
+            )}
+            {!result && !busy && (
+              <div className="empty">
+                <div className="empty-art">
+                  <i />
+                  <i />
+                  <i />
+                  <span>127.0.0.1</span>
+                </div>
+                <h3>See what is really listening.</h3>
+                <p>
+                  Select your laptop's detected IP, choose common ports or the
+                  full TCP range, then start. For the included HTTP fixture, use
+                  custom port 8899 and automatic checks.
+                </p>
+                <code>py -3 demo_server.py</code>
+                <p className="muted">
+                  Only systems you own or have written permission for. No
+                  automatic network sweeps.
+                </p>
+              </div>
+            )}
+            {result && (
+              <>
+                <div className="report-top">
+                  <div>
+                    <span className="eyebrow">
+                      {result.status.toUpperCase()} /{" "}
+                      {result.scope.own_machine
+                        ? "OWN MACHINE"
+                        : "AUTHORIZED SCOPE"}
+                    </span>
+                    <h3>{result.scope.target}</h3>
+                    <p>
+                      Selected IP: <code>{result.scope.selected_address}</code>
+                    </p>
+                  </div>
+                  <div className="exports">
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        download(
+                          JSON.stringify(result, null, 2),
+                          "application/json",
+                          "scopecheck-report.json",
+                        )
+                      }
+                    >
+                      JSON ↓
+                    </button>
+                    <button className="outline" onClick={htmlReport}>
+                      HTML ↓
+                    </button>
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        window.open(
+                          "/api/jobs/" + job.id + "/print",
+                          "_blank",
+                          "noopener,noreferrer",
+                        )
+                      }
+                    >
+                      Print / PDF
+                    </button>
+                  </div>
+                </div>
+                <div className="stats">
+                  {["open", "closed", "timeout", "error"].map((k) => (
+                    <div key={k}>
+                      <strong>{result.summary[k]}</strong>
+                      <span>{k}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="review-note">
+                  {result.coverage.completed}/{result.coverage.requested} ports
+                  observed. {result.coverage.unscanned} unscanned.{" "}
+                  {result.coverage.open_checks_pending} open ports with checks
+                  pending. Open does not mean vulnerable. Cancelled scans are
+                  incomplete.
+                </div>
+                {result.configuration.ignored_manual_ports.length > 0 && (
+                  <p className="ignored">
+                    Ignored optional ports outside this scan:{" "}
+                    {result.configuration.ignored_manual_ports.join(", ")}.
+                  </p>
+                )}
+                <div className="result-tools">
+                  <label>
+                    State
+                    <select
+                      aria-label="Result state"
+                      value={filter}
+                      onChange={(e) => {
+                        setFilter(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      {["open", "all", "closed", "timeout", "error"].map(
+                        (x) => (
+                          <option key={x}>{x}</option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                  <label>
+                    Search
+                    <input
+                      aria-label="Search results"
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(0);
+                      }}
+                      placeholder="Port, service, banner"
+                    />
+                  </label>
+                </div>
+                <div className="port-table">
+                  <div className="table-head">
+                    <span>PORT / TCP</span>
+                    <span>STATE</span>
+                    <span>SERVICE / BASIS</span>
+                    <span />
+                  </div>
+                  {visible.map((r) => (
+                    <button
+                      className="table-row"
+                      key={r.port}
+                      onClick={() =>
+                        setDetail(detail === r.port ? null : r.port)
+                      }
+                    >
+                      <strong>{r.port}</strong>
+                      <span className={"state " + r.state}>{r.state}</span>
+                      <span>
+                        {r.service?.name || "Not checked"}
+                        <small>
+                          {r.service?.basis || "TCP connection observation"}
+                        </small>
+                      </span>
+                      <span>↗</span>
+                    </button>
+                  ))}
+                </div>
+                {rows.length === 0 && <p>No matching port observations.</p>}
+                <div className="pagination">
+                  <span>
+                    {rows.length} matching · page {page + 1}/
+                    {Math.max(1, Math.ceil(rows.length / 50))}
+                  </span>
+                  <button disabled={!page} onClick={() => setPage(page - 1)}>
+                    Previous
+                  </button>
+                  <button
+                    disabled={(page + 1) * 50 >= rows.length}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+                {detail !== null &&
+                  (() => {
+                    const r = result.results.find((x) => x.port === detail);
+                    return (
+                      <article className="port">
+                        <div className="port-top">
+                          <h4>
+                            <span>{r.port}</span> / TCP
+                          </h4>
+                          <b className={"state " + r.state}>{r.state}</b>
+                          <button
+                            className="close-detail"
+                            onClick={() => setDetail(null)}
+                          >
+                            Close
+                          </button>
+                        </div>
+                        <div className="observation">
+                          {r.check_note && <p>{r.check_note}</p>}
+                          {r.http && (
+                            <>
+                              <h5>HTTP / configuration</h5>
+                              <p>{r.http.response_status || r.http.status}</p>
+                              <p className="banner-text">
+                                {r.http.server_header}
+                              </p>
+                              {r.http.missing_headers?.length > 0 && (
+                                <>
+                                  <b className="review-label">
+                                    REVIEW / MISSING HEADERS
+                                  </b>
+                                  <ul>
+                                    {r.http.missing_headers.map((x) => (
+                                      <li key={x}>{x}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                              {r.http.cookies?.length > 0 && (
+                                <>
+                                  <h5>Cookie flags (values omitted)</h5>
+                                  {r.http.cookies.map((c, i) => (
+                                    <p key={i}>
+                                      {c.name}: Secure {String(c.secure)},
+                                      HttpOnly {String(c.httponly)}, SameSite{" "}
+                                      {c.samesite || "not set"}
+                                    </p>
+                                  ))}
+                                </>
+                              )}
+                              {r.http.version_hints?.map((h, i) => (
+                                <div className="hint" key={i}>
+                                  <strong>
+                                    Possible version match, not confirmed
+                                  </strong>
+                                  <p>
+                                    {h.product} {h.reported_version}:{" "}
+                                    {h.advisories.join(", ")}
+                                  </p>
+                                  <p>{h.note}</p>
+                                  <a
+                                    href={h.source}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Official advisory ↗
+                                  </a>
+                                </div>
+                              ))}
+                              <p className="muted">{r.http.note}</p>
+                            </>
+                          )}
+                          {r.tls && (
+                            <>
+                              <h5>TLS / certificate</h5>
+                              <p>
+                                {r.tls.status} ·{" "}
+                                {r.tls.protocol || "no verified protocol"}
+                              </p>
+                              <p>{r.tls.reason || r.tls.error}</p>
+                              {r.tls.days_remaining != null && (
+                                <p>
+                                  {r.tls.days_remaining} days remaining ·{" "}
+                                  {r.tls.expiry_review}
+                                </p>
+                              )}
+                              <p className="muted">{r.tls.note}</p>
+                            </>
+                          )}
+                          {r.banner && (
+                            <>
+                              <h5>Greeting / passive observation</h5>
+                              <p className="banner-text">
+                                {r.banner.text || r.banner.status}
+                              </p>
+                            </>
+                          )}
+                          <details>
+                            <summary>Raw observation JSON</summary>
+                            <pre>{JSON.stringify(r, null, 2)}</pre>
+                          </details>
+                        </div>
+                      </article>
+                    );
+                  })()}
+                <details className="limits">
+                  <summary>Scope & limitations</summary>
+                  {result.limits.map((x) => (
+                    <p key={x}>{x}</p>
+                  ))}
+                  <p>
+                    Print / PDF opens the complete report in a new tab. Press
+                    Ctrl+P (Mac: Cmd+P), then Save as PDF. HTML reports are
+                    self-contained and escaped. JSON includes all observed
+                    states; the print report includes every open port, not just
+                    the filtered page.
+                  </p>
+                </details>
+              </>
+            )}
+          </section>
+        </div>
+        <footer>
+          <span>ScopeCheck / Local-first security learning</span>
+          <span>
+            Private reports stay on this machine unless you export/share them.
+          </span>
+        </footer>
+      </main>
+    </>
+  );
 }
