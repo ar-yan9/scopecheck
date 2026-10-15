@@ -22,7 +22,7 @@
   Frontend: React browser UI. JSON: structured text format jo dono exchange karte.
 - CVE: published vulnerability identifier, severity score nahi. Version match
   se actual vulnerability prove nahi hoti. Patch backports banner change bina bhi
-  vulnerability fix kar sakte hain. Is draft me sirf 2 Apache advisory hints hain.
+  vulnerability fix kar sakte hain. Is version me sirf 2 Apache advisory hints hain.
 
 ## Ek tiny connect example, line by line
 
@@ -51,34 +51,48 @@ remote strings data hain, instructions nahi. React unhe escaped text me dikhata.
 1. `ports()` likh: valid range, duplicates, hard cap. Checkpoint: bad ports pe no
    network call. `test_ports` aur `test_ports_reject` dekh.
 2. `resolve_plan()` likh: DNS snapshot, exact written scope, non-local permission,
-   metadata/link-local block. Checkpoint: mixed authorized/unauthorized DNS fail.
+   non-owned metadata/link-local block. Checkpoint: mixed authorized/unauthorized DNS fail.
 3. `tcp_probe()` likh: open/refused/timeout/error alag. Checkpoint: owned localhost
    listening server aur bound-not-listening socket ke tests.
 4. RateGate + bounded worker pool add kar. Checkpoint: connections stagger hote
    hain; concurrency aur rate ek cheez nahi. Saare enrichment calls bhi gate use karein.
 5. Passive banner read add kar: no payload, small size, strip terminal controls.
-6. HTTP HEAD checker likh: fixed path, header cap + deadline, no redirect, no
-   cookies. Checkpoint: local 302 fixture follow nahi hota, missing headers review.
+6. HTTP HEAD checker likh: fixed path, header cap + deadline, no redirect, cookie flags only, no values. Checkpoint: local 302 fixture follow nahi hota, missing headers review.
 7. Verified TLS checker add kar. Checkpoint: generated localhost CA/cert works;
    wrong trust pe stop, insecure fallback nahi.
 8. `advisories.py` padh: 2 exact rules, official source, possible-only label.
    Khud rules add karne se pehle vendor affected-version record verify kar.
 9. FastAPI model/gates + one-active-scan lock. Checkpoint: Origin/Host/permission
    fail; local valid request work. Public deploy abhi nahi.
-10. React form + loading/error + findings + JSON export. Checkpoint: permission
-    ke bina disabled, unsafe remote HTML text ki tarah render, mobile no overflow.
+10. React form + loading/error + findings + JSON/HTML/PDF-view export. Checkpoint: external permission gate, unsafe remote HTML text ki tarah render, mobile no overflow.
 11. README/update tests likh. Apni understanding se code change kar, test chala,
     phir commit. Blind copy se zyada ek-ek function samajhke build kar.
 
 ## Files ka role
 
-`scanner.py` engine/CLI, `advisories.py` curated rules, `app.py` local API,
+`scanner.py` low-level probes/CLI, `engine.py` bounded concurrent engine,
+`jobs.py` background jobs/SQLite history, `profiles.py` port presets/protocol hints,
+`reports.py` escaped printable HTML, `advisories.py` curated rules, `app.py` local API,
 `run.py` loopback launcher, `demo_server.py` owned fixture, `test_scanner.py`
 backend/integration tests, `frontend/src/App.jsx` UI, `style.css` design.
 
 ## Aage kya missing hai
 
 No UDP, authenticated assessment, complete service fingerprinting, complete
-vulnerability database, exploit verification, multi-host jobs, persistent history,
+vulnerability database, exploit verification, multi-host jobs,
 public hosting security or owner-verification system. Ye real local working
-starter hai, professional pentest ya production launch ka substitute nahi.
+workbench hai, professional pentest ya production launch ka substitute nahi.
+
+## v0.2 ko padhne ka order
+
+`profiles.py` me curated ports aur protocol hints dekh. `engine.execute()` me
+rate aur concurrency alag controls hain. Pending futures workers ke multiple
+tak bound hain, ports count tak nahi. `jobs.py` progress/cancel aur local SQLite
+report persistence rakhta hai. UI polling race ka rule: report fetch complete
+hone se pehle busy flag clear mat kar, warna effect cleanup response discard
+kar sakta hai. History ko memory nahi, local private data samajh.
+
+Full-range test mocked network se 65,535 indices cover karta hai. Real local
+fixtures TCP/HTTP/TLS behavior cover karte hain. In tests ko actual internet
+full-range scan ya measured 8GB memory benchmark mat bolna. Protocol support
+enumeration, authenticated checks aur a larger verified advisory feed abhi nahi.
