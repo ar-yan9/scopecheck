@@ -13,22 +13,25 @@ import ssl
 import threading
 import time
 
-VERSION = '0.1.0-draft'
+VERSION = '0.2.0'
 DEFAULT_PORTS = [22, 80, 443, 8000, 8080]
-MAX_PORTS = 128
+MAX_PORTS = 65535
 
 
 def ports(value):
+    from profiles import PRESETS
+    if value in PRESETS:
+        return sorted(PRESETS[value])
     result = set()
     for part in value.split(','):
         if not re.fullmatch(r'\d+(?:-\d+)?', part):
             raise ValueError('Ports must be numbers or ranges, for example 22,80,443 or 8000-8005')
         lo, hi = map(int, part.split('-')) if '-' in part else (int(part), int(part))
         if not 1 <= lo <= hi <= 65535 or hi - lo + 1 > MAX_PORTS:
-            raise ValueError('Ports must be 1-65535, with at most 128 ports total')
+            raise ValueError('Ports must be 1-65535, with at most 65535 ports total')
         result.update(range(lo, hi + 1))
         if len(result) > MAX_PORTS:
-            raise ValueError('At most 128 ports per run')
+            raise ValueError('At most 65535 ports per run')
     return sorted(result)
 
 
@@ -49,25 +52,43 @@ def target_name(value):
         return name
 
 
+def local_addresses():
+    """Actual interface addresses only. DNS names/private ranges do not prove ownership."""
+    found = {'127.0.0.1','::1'}
+    try:
+        import psutil
+        for values in psutil.net_if_addrs().values():
+            for value in values:
+                if value.family in (socket.AF_INET,socket.AF_INET6):
+                    try:
+                        parsed=ipaddress.ip_address(value.address.split('%',1)[0])
+                        if not parsed.is_unspecified and not parsed.is_multicast and not (parsed.version==6 and parsed.is_link_local):found.add(str(parsed))
+                    except ValueError: pass
+    except (ImportError,OSError):
+        pass
+    return found
+
+
 def resolve_plan(target, authorized=False, scope=()):
-    """Resolve once. Validate every answer; connect only to the selected numeric IP."""
     target = target_name(target)
     answers = sorted({item[4][0] for item in socket.getaddrinfo(target, None, type=socket.SOCK_STREAM)},
                      key=lambda s: (ipaddress.ip_address(s).version, s))
     if not answers:
         raise ValueError('No target address resolved')
+    own = local_addresses()
     networks = [ipaddress.ip_network(x, strict=False) for x in scope]
     for raw in answers:
         address = ipaddress.ip_address(raw)
-        if address.is_unspecified or address.is_multicast or address.is_link_local:
+        if address.is_unspecified or address.is_multicast or (address.is_link_local and raw not in own):
             raise ValueError('Unspecified, multicast and link-local targets are not supported')
-        if not address.is_loopback:
+        if raw not in own and not address.is_loopback:
             if not authorized:
-                raise ValueError('Non-local scans require --authorized and --scope for written permission')
+                raise ValueError('External devices require ownership/written-permission confirmation')
             if not networks or not any(address in net for net in networks):
-                raise ValueError('Every DNS address must be inside the explicitly authorized --scope')
+                raise ValueError('Every non-owned DNS address must be inside the explicitly authorized scope')
     return {'target': target, 'resolved_addresses': answers, 'selected_address': answers[0],
             'scope': list(scope), 'authorization_confirmed': bool(authorized),
+            'own_machine': all(x in own or ipaddress.ip_address(x).is_loopback for x in answers),
             'loopback_only': all(ipaddress.ip_address(x).is_loopback for x in answers)}
 
 
@@ -109,6 +130,9 @@ def tls_observation(address, hostname, port, timeout, gate):
                 days = (int((ssl.cert_time_to_seconds(expires) - time.time()) // 86400) if expires else None)
                 return {'status': 'verified', 'protocol': conn.version(), 'cipher': conn.cipher()[0],
                         'expires': expires, 'days_remaining': days,
+                        'expiry_review': 'expired' if days is not None and days < 0 else 'expires_within_30_days' if days is not None and days < 30 else 'not_near_expiry',
+                        'subject': str(cert.get('subject',())), 'issuer':str(cert.get('issuer',())),
+                        'negotiated_legacy_protocol': conn.version() in {'TLSv1','TLSv1.1'},
                         'note': 'One negotiated connection only; not a complete TLS protocol or cipher audit'}
     except ssl.SSLCertVerificationError as exc:
         return {'status': 'certificate_not_verified', 'reason': getattr(exc, 'verify_message', str(exc)),
@@ -145,17 +169,22 @@ def http_observation(address, hostname, port, timeout, gate, tls=False):
         if not re.fullmatch(r'HTTP/1\.[01] \d{3}(?: .*)?', lines[0]):
             return {'status': 'not_http1', 'note': 'Only HTTP/1.x HEAD responses supported'}
         headers = {}
+        cookies = []
         for line in lines[1:]:
             if ':' in line:
                 key, value = line.split(':', 1)
                 headers[key.lower().strip()] = value.strip()
-        wanted = ['content-security-policy', 'x-content-type-options', 'referrer-policy']
+                if key.lower().strip() == 'set-cookie':
+                    parts = [x.strip() for x in value.split(';')]
+                    attrs = {x.split('=',1)[0].lower():x.split('=',1)[1] if '=' in x else True for x in parts[1:]}
+                    cookies.append({'name': parts[0].split('=',1)[0], 'secure':bool(attrs.get('secure')), 'httponly':bool(attrs.get('httponly')), 'samesite':attrs.get('samesite'), 'note':'Cookie values omitted; flags are observations, not exploitability proof'})
+        wanted = ['content-security-policy', 'x-content-type-options', 'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy']
         if tls:
             wanted.append('strict-transport-security')
         observed = {key: headers.get(key) for key in wanted}
         frame_policy = 'content-security-policy' in headers and 'frame-ancestors' in headers['content-security-policy'].lower()
         return {'status': 'observed', 'response_status': lines[0], 'transport': 'HTTPS' if tls else 'HTTP',
-                'server_header': headers.get('server'), 'version_hints': version_hints(headers.get('server')),  'security_headers': observed,
+                'cookies': cookies, 'server_header': headers.get('server'), 'version_hints': version_hints(headers.get('server')),  'security_headers': observed,
                 'missing_headers': [k for k, v in observed.items() if not v],
                 'frame_protection_header_present': bool(headers.get('x-frame-options') or frame_policy),
                 'note': 'HEAD / only, no redirect following. Missing headers are review items, not confirmed vulnerabilities. Header presence does not validate its policy.'}
@@ -181,34 +210,8 @@ def passive_banner(address, port, timeout, gate):
 
 
 def scan(plan, port_list, timeout=1, workers=4, rate=5, http_ports=(), tls_ports=(), banner_ports=()):
-    if not port_list or len(set(port_list)) != len(port_list) or len(port_list) > MAX_PORTS or any(type(p) is not int or not 1 <= p <= 65535 for p in port_list):
-        raise ValueError('1-128 distinct ports required')
-    if not 0.1 <= timeout <= 5 or type(workers) is not int or not 1 <= workers <= 16 or not 0.2 <= rate <= 10:
-        raise ValueError('Timeout 0.1-5s; workers 1-16; connection rate 0.2-10 per second')
-    if not (set(http_ports) | set(tls_ports) | set(banner_ports)) <= set(port_list):
-        raise ValueError('HTTP, TLS and banner ports must be among requested TCP ports')
-    gate = RateGate(rate)
-    address = plan['selected_address']
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        rows = list(pool.map(lambda p: tcp_probe(address, p, timeout, gate), port_list))
-    for row in rows:
-        p = row['port']
-        if row['state'] != 'open':
-            continue
-        if p in tls_ports:
-            row['tls'] = tls_observation(address, plan['target'], p, timeout, gate)
-        if p in http_ports:
-            row['http'] = http_observation(address, plan['target'], p, timeout, gate, tls=p in tls_ports)
-        if p in banner_ports:
-            row['banner'] = passive_banner(address, p, timeout, gate)
-    return {'tool': 'ScopeCheck', 'version': VERSION, 'created_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
-            'scope': plan, 'configuration': {'ports': port_list, 'timeout_seconds': timeout, 'workers': workers, 'max_connections_per_second': rate},
-            'results': rows, 'summary': {state: sum(r['state'] == state for r in rows) for state in ['open', 'closed', 'timeout', 'error']},
-            'limits': ['TCP connect only: no UDP, OS fingerprinting, vulnerability exploitation or brute force',
-                       'Only the selected numeric address was scanned, not all DNS answers',
-                       'Open ports and missing headers are observations, not confirmed vulnerabilities',
-                       'One negotiated TLS connection is not a complete TLS audit',
-                       'Banners and headers are untrusted remote data and may contain sensitive details']}
+    from engine import execute
+    return execute(plan,port_list,timeout,workers,rate,True,http_ports,tls_ports,banner_ports)
 
 
 def write_report(report, path):
