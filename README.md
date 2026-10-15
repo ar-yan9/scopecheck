@@ -1,26 +1,13 @@
-# ScopeCheck
+# ScopeCheck v0.2
 
-A working local-first defensive security workbench by Aryan: FastAPI backend,
-React frontend and a dependency-free Python scan engine. Enter one hostname/IP,
-choose a bounded set of TCP ports, confirm authorization, inspect observations
-and export a JSON report. This is a learning project, not a production scanner
-or a complete vulnerability assessment.
+Local-first defensive security workbench by Aryan. FastAPI + React, a bounded
+concurrent TCP engine and local SQLite report history. Inspect your own laptop
+or an explicitly authorized target. Observations are **not confirmed vulnerabilities**.
+This is a working learning project, not a complete pentest or production service.
 
-## Permission first
+## Windows quick start
 
-Scan only systems you own or have **written permission** to test, within the
-agreed target, ports, rate and time window. A public website, reachable IP or
-bug-bounty program is not blanket permission. Check the program's scope and
-rules first. Do not scan a hosting provider's shared infrastructure just because
-you own a site hosted there. No third-party target was scanned for this demo.
-
-The included lab runs on localhost. Its fake Apache/2.4.49 Server header is a
-**fixture**, not a vulnerable Apache installation. It demonstrates how a banner
-hint can be wrong. No exploit payloads are included or sent.
-
-## Windows quick start (Python 3.11 + Node.js 22)
-
-Install Python and Node.js first. Open PowerShell in this project folder:
+Python 3.11 and Node.js 22 required. In PowerShell inside the project:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -32,98 +19,112 @@ cd ..
 .\.venv\Scripts\python.exe run.py
 ```
 
-Open **http://127.0.0.1:8765**. Keep that terminal running. In a second PowerShell
-window in the same project folder:
+Open http://127.0.0.1:8765. Keep the terminal running. In a second terminal:
 
 ```powershell
 .\.venv\Scripts\python.exe demo_server.py
 ```
 
-In the app set target `127.0.0.1`, TCP ports `8899`, HTTP HEAD ports `8899`,
-leave TLS/banner ports empty and tick the permission checkbox. Click
-**Run authorized check**. The lab's port should be open. The report should show
-missing HTTP security headers and a **possible version match**, not a confirmed
-vulnerability. Export JSON saves the report in your browser's download folder.
-Stop either server with Ctrl+C. Port 8899 must be free for the fixture.
+Choose target `127.0.0.1`, preset **Custom**, ports `8899`. Keep automatic checks
+on and click **Start scope check**. No permission checkbox/IP list is needed for
+actual own-machine addresses. Click the open-port row for HTTP observations.
+The lab's Apache version is a fake fixture, **not vulnerable Apache**. Stop the
+servers with Ctrl+C. No outside target is needed for this demo.
 
-Linux/macOS: create the environment with `python3 -m venv .venv`; replace the
-Windows Python path with `.venv/bin/python`. Build the same frontend, then run
-`.venv/bin/python run.py`. The launcher intentionally binds only to loopback.
+Already installed? Stop both servers, run `git pull --ff-only`, reinstall
+requirements, rebuild frontend using `npm ci` and `npm run build`, then restart.
+See [Windows walkthrough](docs/HOW_TO_USE.md) and [learning map](docs/LEARNING.md).
+On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python`.
 
-Beginner Hinglish walkthrough: [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md).
-Concepts and build roadmap: [docs/LEARNING.md](docs/LEARNING.md).
+## What works
 
-## What actually works
+- Full TCP port range **1-65535**, custom ranges, curated **Common 100**,
+  **Ports 1-1000** and **All TCP** presets. Common 100 is our explicit list,
+  not Nmap's measured ranking; 1-1000 is numeric, not the top 1000 by popularity.
+- Background jobs, progress, cooperative cancellation, browser reconnect,
+  coverage counts and completed/cancelled/failed states. Cancelled reports
+  show unscanned ports and pending enrichment; they are not complete scans.
+- Actual interface enumeration: loopback, laptop IPv4/IPv6 and its hostname
+  when all DNS answers are local. A private subnet is **not** assumed owned.
+  IPv6 link-local scope-zone addresses are not supported; use IPv4 or global IPv6.
+- Service-aware automatic checks on discovered open ports. Known web/TLS port
+  hints select HTTP/TLS; greeting ports select passive reads. Unknown protocols
+  are **not blindly sent HTTP/TLS**. Manual protocol overrides are available.
+  Overrides outside the TCP selection are ignored and listed in the report,
+  not allowed to break a new scan because an old form field was left filled.
+- Service names distinguish observed HTTP/SSH greetings from port-number hints.
+  TCP states: open, refused/closed, timeout or error. Timeout is not proof of filtering.
+- HTTP/HTTPS `HEAD /`: status, unverified Server header, CSP, X-Content-Type-Options,
+  Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, frame-protection
+  presence and HTTPS HSTS. Cookie Secure/HttpOnly/SameSite attributes, **not values**.
+  No redirects, login, crawling or response-body collection. Header cap 16 KiB.
+  Missing headers are review items; presence alone does not validate policy.
+- Verified TLS handshake, negotiated protocol/cipher, subject/issuer and expiry
+  review. No insecure fallback. This reports **one negotiated version**, not a
+  complete supported-protocol/cipher audit. Private CA failures need owner review.
+- Passive greetings: maximum 256 bytes, control characters removed, no payload.
+  Text can be misleading or sensitive. Port number alone does not prove service.
+- Two Apache advisory hints: reported 2.4.49 maps to CVE-2021-41773/42013;
+  2.4.50 maps to CVE-2021-42013. Offline exact rules, not a full/live CVE feed.
+  Spoofing, patches and configuration require review. No exploit is attempted.
+- Search, state filters, pagination, row details and raw observations. Remote
+  text is escaped. JSON export includes all observed states; self-contained HTML
+  and its Print/PDF view include every open port independent of the UI filter.
+  **PDF uses browser Print > Save as PDF**, not a native server PDF generator.
+- Local history: newest 20 reports, retained up to 7 days, SQLite under
+  `local-data/history.sqlite3`. Clear in the UI. Reports may contain private data.
+  `SCOPECHECK_HISTORY_DB` can change the path. Git ignores local-data and reports.
 
-- TCP connect scans: open, connection refused/closed, timeout or error.
-  Timeout is **not** labeled "filtered" or proof of a firewall.
-- Passive banners on ports you explicitly select. Reads at most 256 bytes,
-  sends no application payload and strips control characters. A banner may
-  be absent, misleading or sensitive. Port numbers do not prove the service.
-- TLS on selected ports: verified certificate/hostname handshake, negotiated
-  protocol/cipher and expiry where available. Never disables certificate
-  verification. Private CA trust failures are observations, not proof of an
-  exploitable flaw. One negotiation is not a full cipher/protocol audit.
-- HTTP/HTTPS `HEAD /`: status, Server header, CSP, X-Content-Type-Options,
-  Referrer-Policy, frame-protection header presence and HSTS on HTTPS.
-  No redirect following, login, crawling or request-body collection.
-  Headers are capped at 16 KiB with a deadline. HEAD responses may differ
-  from GET. Presence alone does not validate a security policy.
-- Two tightly scoped Apache advisory hints: CVE-2021-41773 for reported 2.4.49,
-  CVE-2021-42013 for reported 2.4.49/2.4.50. Offline rule set, **not** a live CVE
-  feed. Vendor patches/backports and actual configuration require owner review.
-  No claim of complete version/CVE coverage or exploitability.
-- React report, open-port filter, authorization/error states and JSON export.
-  Remote strings render as text, never HTML.
+## Permission and operating limits
 
-## Scope and safety design
+Use only systems you own or have **written permission** to test. Permission must
+cover target, ports, time and rate. A public site, reachable IP or bug-bounty
+listing is not blanket permission. Owning a hosted website does not mean owning
+its provider's infrastructure. Read program rules first.
 
-Defaults: localhost, five selected TCP ports, 4 workers, max 5 new connections
-per second, 1 second socket timeout. Hard limits: 128 ports, 16 workers,
-10 connections/sec and 0.1-5 second timeout. Every scan/enrichment connection
-shares the same rate gate. No UDP, SYN/raw-packet scans, brute force, exploitation,
-DoS, credential tests or evasion. Even a light connect scan can trigger alerts.
+The web UI defaults to 32 workers, 50 new connections/second, 1s timeout. Own-machine
+limits: 128 workers, 200 connections/second, .1-5s timeout. External authorized
+jobs: at most 16 workers and 25 connections/second; lower them to the owner's
+rules. A single shared rate gate covers discovery and checks. The executor has
+bounded pending work, not 65,535 live threads/futures. Defaults suit an 8GB laptop,
+but measured memory and completion time depend on the OS and services.
+At 50 connections/sec a full discovery alone needs at least about 22 minutes;
+timeouts and enrichment can add more. Lower rate is safer for fragile services.
 
-Non-local targets require explicit authorization and numeric `--scope`/UI scope.
-DNS resolves once; **every** answer must be authorized, and the chosen numeric
-IP is pinned for all connections. Only that one selected address is scanned.
-Unspecified, multicast and link-local addresses are rejected, including common
-cloud metadata addresses. CIDRs describe permission scope, not network sweeps.
-The checkbox is a user's assertion, not technical proof of permission.
+Non-owned addresses need the permission checkbox and numeric approved IP/CIDR
+scope. **Every** DNS answer must be authorized; one numeric IP is pinned and
+scanned, not a whole network. Rejects unspecified, multicast and non-owned
+link-local/metadata targets. A checkbox is an assertion, not proof of permission.
 
-The API accepts one active scan, same-origin JSON and approved localhost Host
-headers. No CORS access is enabled. Reports remain in the browser until exported;
-the server does not save them automatically. Do not commit exported real-target
-reports: banners/headers can contain private data. There is no automatic redaction.
+No UDP, raw SYN scan, exploitation, brute force, credential tests, evasion or DoS.
+A connect scan still sends traffic, can trigger alerts and can disturb a fragile
+service. Never promise zero impact. Run only one instance: separate processes
+are not globally rate-limited. OS DNS lookup may exceed socket timeout.
 
-**Do not publish this backend as a public scanner service, bind to 0.0.0.0, or
-expose it through a tunnel.** Local controls are not authentication, tenant
-isolation or abuse prevention. A launchable public service would need a separate
-security design, target-ownership verification, authentication, quotas, audit
-controls, deployment hardening and a legal review. OS DNS resolution uses the
-system resolver and may exceed socket timeouts. Closing the browser does not
-cancel an already-running scan. No persistent scan jobs or automatic schedules.
+The API is loopback-only with Host/Origin/JSON gates and one active scan.
+Closing the tab does not cancel the job; reopening reconnects while the server
+is alive. Use Cancel scan. Restarting the server stops active work; completed
+history persists, but unfinished jobs are not resumed.
+
+**Do not bind to 0.0.0.0, expose through a tunnel or deploy as a public scanner.**
+Local controls are not authentication, ownership verification or tenant isolation.
+Do not commit real-target reports or share them outside agreed scope.
 
 ## CLI
 
-Loopback example, while the fixture is running:
-
 ```powershell
-.\.venv\Scripts\python.exe scanner.py 127.0.0.1 --ports 8899 --http-ports 8899 --output lab-report.json
+.\.venv\Scripts\python.exe scanner.py 127.0.0.1 --ports 8899 --output lab-report.json
+.\.venv\Scripts\python.exe scanner.py 127.0.0.1 --ports common100 --plan-only
 ```
 
-For a non-local authorized target, use its approved hostname/IP plus
-`--authorized --scope <approved-numeric-IP-or-CIDR>`. Do not copy an unknown
-internet target into a scan command. Use `--plan-only` to validate target/scope
-without scan connections (DNS queries may still happen).
+Presets: `common100`, `first1000`, `all`, or `1-65535`. `--plan-only` resolves and
+validates without scan connections (DNS can still happen). The CLI keeps slower
+4-worker/5-per-second defaults; `--workers` and `--rate` can raise them within
+scope limits. `--http-ports`, `--tls-ports`, `--banner-ports` override protocols;
+HTTP+TLS on the same port means HTTPS. Existing output files are never overwritten.
+Non-owned targets need `--authorized --scope <approved-IP-or-CIDR>`.
 
-HTTP/TLS/banner lists must be subsets of the TCP port list. A port in both
-HTTP and TLS lists uses HTTPS. Existing CLI report files are never overwritten.
-The CLI can check localhost without the flag; the web UI/API always require
-permission confirmation. Separate terminal sessions are not globally rate-limited:
-run one tool instance at a time.
-
-## Run tests
+## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -133,28 +134,24 @@ npm test
 npm run build
 ```
 
-Tests cover scope rejection, all DNS addresses, parsing/bounds, rate gate,
-real owned-loopback HTTP/TCP, a locally generated TLS certificate/HTTPS,
-certificate failures, advisory rules, report overwrite protection, API
-permission/origin/host/concurrency gates and frontend authorization/error states.
-The TLS test uses OpenSSL to generate an ephemeral certificate and skips if
-OpenSSL is not installed. No external scan target is needed.
+Tests include real localhost TCP/HTTP and generated-certificate TLS/HTTPS, scope
+and DNS gates, full-range engine with mocked connections, bounded/cancellable
+work, history reload, escaped exports, cookie-value omission and API/UI gates.
+OpenSSL-dependent TLS tests skip if OpenSSL is missing. No arbitrary remote scan.
+CI runs backend on Windows/Ubuntu Python 3.11/3.12 and tests/builds frontend.
 
-## Interpreting a report / responsible disclosure
+## Responsible disclosure
 
-Do not assign "critical" severity to an open port or missing header. This tool
-reports **observed state**, **review items** and **possible version matches**.
-It does not calculate CVSS, validate vulnerabilities or certify security.
-A blank report does not mean a target is secure. A company report needs owner
-permission, a safe reproducible observation, scope/time details, clear uncertainty
-and their published security/bug-bounty disclosure channel. Never threaten a
-company, demand payment or access private data to prove a point.
+Open ports and missing headers are not automatically bugs. Do not assign
+critical severity or claim a breach from these results. A blank report is not
+proof of security. Use an owner's published private disclosure channel, within
+permission, with timestamp/scope, reproducible observation and uncertainty.
+Do not access private data, threaten a company or demand payment.
 
 ## Advisory sources
 
 - https://httpd.apache.org/security/vulnerabilities_24.html
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.51
 
-Rules reviewed against these official Apache records on 16 October 2026. The
-version-to-advisory hints are deliberately small and must not imply coverage
-of other products or newer advisories.
+Rules reviewed against these official records on 16 October 2026. Two exact
+rules do not imply coverage of other products or newer advisories.
