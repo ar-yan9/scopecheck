@@ -33,7 +33,7 @@ def test_mock_full65535_bounded_engine_no_network(monkeypatch):
     # A full-range engine regression with fake TCP probes, not a network sweep.
     monkeypatch.setattr(engine,'tcp_probe',lambda a,p,t,g:{'port':p,'state':'closed'})
     states=[]
-    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True},list(range(1,65536)),workers=64,rate=200,progress=states.append)
+    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True,'resolved_addresses':['127.0.0.1']},list(range(1,65536)),workers=64,rate=200,progress=states.append)
     assert r['summary']['closed']==65535
     assert r['coverage']['unscanned']==0
     assert states[-1]['completed']==65535
@@ -46,13 +46,13 @@ def test_cancel_partial_coverage(monkeypatch):
     monkeypatch.setattr(engine,'tcp_probe',probe)
     def progress(x):
         if x['completed']>=1:stop.set()
-    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True},list(range(1,101)),workers=2,rate=10,cancel=stop,progress=progress)
+    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True,'resolved_addresses':['127.0.0.1']},list(range(1,101)),workers=2,rate=10,cancel=stop,progress=progress)
     assert r['status']=='cancelled' and r['coverage']['unscanned']>0
     assert r['coverage']['completed']==len(r['results'])
 
 def test_mismatched_overrides_ignored_no_validation_error(monkeypatch):
     monkeypatch.setattr(engine,'tcp_probe',lambda a,p,t,g:{'port':p,'state':'closed'})
-    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True},[22],http_ports=[8899],tls_ports=[443])
+    r=engine.execute({'selected_address':'127.0.0.1','target':'localhost','own_machine':True,'resolved_addresses':['127.0.0.1']},[22],http_ports=[8899],tls_ports=[443])
     assert r['configuration']['ignored_manual_ports']==[443,8899]
 
 def test_no_blind_active_probe_unknown_port(monkeypatch):
@@ -72,7 +72,7 @@ def test_history_lifecycle_and_html_escaping(tmp_path,monkeypatch):
         r=original(*a,**k);r['scope']['target']='<script>alert(1)</script>';return r
     monkeypatch.setattr(jobs,'execute',execute)
     manager=Jobs(tmp_path/'history.db')
-    id=manager.start({'selected_address':'127.0.0.1','target':'localhost','own_machine':True},[1],workers=1,rate=10)
+    id=manager.start({'selected_address':'127.0.0.1','target':'localhost','own_machine':True,'resolved_addresses':['127.0.0.1']},[1],workers=1,rate=10)
     r=wait_job(manager,id)['report']
     assert len(manager.history())==1
     assert '<script>alert(1)</script>' not in render_html(r)
@@ -120,7 +120,7 @@ def test_single_active_job_conflict(tmp_path,monkeypatch):
     def slow(*a,**k):
         entered.set();release.wait(2);return original(*a,**k)
     monkeypatch.setattr(jobs,'execute',slow);monkeypatch.setattr(engine,'tcp_probe',lambda a,p,t,g:{'port':p,'state':'closed'})
-    manager=Jobs(tmp_path/'h.db');plan={'selected_address':'127.0.0.1','target':'localhost','own_machine':True}
+    manager=Jobs(tmp_path/'h.db');plan={'selected_address':'127.0.0.1','target':'localhost','own_machine':True,'resolved_addresses':['127.0.0.1']}
     id=manager.start(plan,[1]);entered.wait(1)
     try:
         with pytest.raises(ValueError):manager.start(plan,[2])
