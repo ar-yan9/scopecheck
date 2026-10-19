@@ -329,3 +329,63 @@ def test_html_includes_all_open_ports_and_escapes_remote_text():
     assert "80 / TCP / open" in rendered and "443 / TCP / open" in rendered
     assert "<script>bad</script>" not in rendered and "<img src=x>" not in rendered
     assert "&lt;img src=x&gt;" in rendered and "&lt;script&gt;" in rendered
+
+
+def test_csv_export(tmp_path, monkeypatch):
+    from reports import render_csv
+
+    monkeypatch.setattr(
+        engine,
+        "tcp_probe",
+        lambda a, p, t, g: (
+            {
+                "port": p,
+                "state": "open",
+                "connect_ms": 1.5,
+                "service": {
+                    "name": "http",
+                    "basis": "observed HTTP response",
+                    "verified_protocol": True,
+                },
+                "http": {
+                    "status": "observed",
+                    "response_status": 200,
+                    "server_header": 'nginx, "quoted"',
+                    "missing_headers": ["Content-Security-Policy", "X-Frame-Options"],
+                },
+                "checks_run": ["http_head"],
+            }
+            if p == 80
+            else {"port": p, "state": "closed"}
+        ),
+    )
+    monkeypatch.setattr(app, "manager", Jobs(tmp_path / "csv-history.db"))
+    monkeypatch.setattr(engine, "enrich", lambda row, *a, **k: row)
+    with TestClient(app.app) as client:
+        res = client.post(
+            "/api/jobs",
+            json={"target": "127.0.0.1", "ports": "80-82", "authorized": False},
+        )
+        assert res.status_code == 200
+        id = res.json()["id"]
+        wait_job(app.manager, id)
+        r = client.get("/api/jobs/" + id + "/report.csv")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/csv")
+        assert "scopecheck-report.csv" in r.headers["content-disposition"]
+        lines = r.text.splitlines()
+        assert lines[0].startswith("target,created_utc,port,state")
+        assert len(lines) == 4  # header + 3 ports
+        row80 = [l for l in lines if ",80,open," in l][0]
+        assert "observed HTTP response" in row80
+        assert '"nginx, ""quoted"""' in row80  # csv quoting escapes commas/quotes
+        assert "Content-Security-Policy; X-Frame-Options" in row80
+        assert sum(1 for l in lines if ",closed," in l) == 2
+        # unit-level: csv parses back cleanly
+        import csv as csvmod, io
+
+        report = wait_job(app.manager, id)["report"]
+        rows = list(csvmod.reader(io.StringIO(render_csv(report))))
+        assert rows[1][4] == "1.5" and rows[1][9] == "200"
+        # 404 paths
+        assert client.get("/api/jobs/nope/report.csv").status_code == 404
