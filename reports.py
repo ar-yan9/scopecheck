@@ -153,3 +153,52 @@ def render_html(report):
         + '</ul><p class="meta">JSON export includes all observed port states. This HTML details every open port. Reports can contain private data; share only within permission and use the owner\'s responsible-disclosure channel.</p></html>'
     )
     return "".join(parts)
+
+
+def render_csv(report):
+    """One row per probed port; stdlib csv quoting handles any target text."""
+    import csv, io
+
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\r\n")
+    w.writerow(
+        [
+            "target",
+            "created_utc",
+            "port",
+            "state",
+            "connect_ms",
+            "service",
+            "service_basis",
+            "verified_protocol",
+            "http_status",
+            "http_response_status",
+            "server_header_unverified",
+            "missing_headers",
+            "checks_run",
+            "detail",
+        ]
+    )
+    for row in report["results"]:
+        service = row.get("service") or {}
+        http = row.get("http") or {}
+        detail = row.get("check_note") or row.get("note") or row.get("error") or ""
+        w.writerow(
+            [
+                report["scope"]["target"],
+                report["created_utc"],
+                row["port"],
+                row["state"],
+                row.get("connect_ms", ""),
+                service.get("name", ""),
+                service.get("basis", ""),
+                service.get("verified_protocol", ""),
+                http.get("status", ""),
+                http.get("response_status", ""),
+                http.get("server_header", ""),
+                "; ".join(http.get("missing_headers", [])),
+                "; ".join(row.get("checks_run", [])),
+                detail,
+            ]
+        )
+    return out.getvalue()
