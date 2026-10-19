@@ -71,6 +71,8 @@ On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python`.
   text is escaped. JSON export includes all observed states; self-contained HTML
   and its Print/PDF view include every open port independent of the UI filter.
   **PDF uses browser Print > Save as PDF**, not a native server PDF generator.
+  CSV export (`GET /api/jobs/{id}/report.csv`) lists one row per probed port with
+  state, service hints, HTTP observations and check coverage, for spreadsheets.
 - Local history: newest 20 reports, retained up to 7 days, SQLite under
   `local-data/history.sqlite3`. Clear in the UI. Reports may contain private data.
   `SCOPECHECK_HISTORY_DB` can change the path. Git ignores local-data and reports.
