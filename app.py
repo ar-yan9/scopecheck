@@ -4,7 +4,7 @@ from pathlib import Path
 import threading
 import os
 from jobs import Jobs
-from reports import render_csv, render_html
+from reports import render_csv, render_html, render_md
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from scanner import local_addresses
 from profiles import PRESETS
@@ -200,6 +200,20 @@ def report_csv(id: str):
         media_type="text/csv",
         headers={
             "Content-Disposition": 'attachment; filename="scopecheck-report.csv"'
+        },
+    )
+
+
+@app.get("/api/jobs/{id}/report.md")
+def report_md(id: str):
+    result = manager.get(id)
+    if not result or "report" not in result:
+        raise HTTPException(404, "Report not ready")
+    return Response(
+        render_md(result["report"]),
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": 'attachment; filename="scopecheck-report.md"'
         },
     )
 
