@@ -389,3 +389,64 @@ def test_csv_export(tmp_path, monkeypatch):
         assert rows[1][4] == "1.5" and rows[1][9] == "200"
         # 404 paths
         assert client.get("/api/jobs/nope/report.csv").status_code == 404
+
+
+def test_md_export(tmp_path, monkeypatch):
+    from reports import render_md
+
+    monkeypatch.setattr(
+        engine,
+        "tcp_probe",
+        lambda a, p, t, g: (
+            {
+                "port": p,
+                "state": "open",
+                "connect_ms": 1.5,
+                "service": {
+                    "name": "http",
+                    "basis": "observed HTTP response",
+                    "verified_protocol": True,
+                },
+                "http": {
+                    "status": "observed",
+                    "response_status": 200,
+                    "server_header": 'nginx | "quoted"\nsecond line',
+                    "missing_headers": ["Content-Security-Policy"],
+                },
+                "checks_run": ["http_head"],
+            }
+            if p == 80
+            else {"port": p, "state": "closed"}
+        ),
+    )
+    monkeypatch.setattr(app, "manager", Jobs(tmp_path / "md-history.db"))
+    monkeypatch.setattr(engine, "enrich", lambda row, *a, **k: row)
+    with TestClient(app.app) as client:
+        res = client.post(
+            "/api/jobs",
+            json={"target": "127.0.0.1", "ports": "80-82", "authorized": False},
+        )
+        assert res.status_code == 200
+        id = res.json()["id"]
+        wait_job(app.manager, id)
+        r = client.get("/api/jobs/" + id + "/report.md")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/markdown")
+        assert "scopecheck-report.md" in r.headers["content-disposition"]
+        text = r.text
+        assert text.startswith("# ScopeCheck evidence report")
+        assert "| Port | State |" in text
+        # 3 probed ports appear as table rows, open one has a detail section
+        assert text.count("\n| 8") == 3
+        assert "### 80 / TCP / open" in text
+        # pipe and newline in the remote server header cannot break the table
+        assert "nginx \\| \"quoted\" second line" in text
+        assert "second line\n" not in text.split("| Detail |")[1].split("## Open")[0]
+        # closed ports are listed in the table, not detailed
+        assert "| 81 | closed |" in text
+        assert "### 81" not in text
+        # unit-level: renders straight from the stored report too
+        report = wait_job(app.manager, id)["report"]
+        assert render_md(report) == text
+        # 404 path
+        assert client.get("/api/jobs/nope/report.md").status_code == 404
