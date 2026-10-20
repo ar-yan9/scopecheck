@@ -202,3 +202,118 @@ def render_csv(report):
             ]
         )
     return out.getvalue()
+
+
+def render_md(report):
+    """Markdown report for pasting into issues/docs. Every remote string is
+    flattened to one line and pipe-escaped so table cells cannot break out."""
+    def esc(x):
+        s = str(x)
+        return (
+            s.replace("\\", "\\\\")
+            .replace("|", "\\|")
+            .replace("\r", " ")
+            .replace("\n", " ")
+        )
+
+    scope = report["scope"]
+    summary = report["summary"]
+    coverage = report["coverage"]
+    lines = [
+        "# ScopeCheck evidence report",
+        "",
+        "_" + esc(report["created_utc"]) + " · v" + esc(report["version"]) + "_",
+        "",
+        "- **Target:** " + esc(scope["target"]),
+        "- **Selected IP:** " + esc(scope["selected_address"]),
+        "- **Run status:** " + esc(report["status"]),
+        "",
+        "**Ports:** "
+        + " · ".join(
+            esc(summary[k]) + " " + k for k in ["open", "closed", "timeout", "error"]
+        ),
+        "",
+        "**Coverage:** "
+        + esc(coverage["completed"])
+        + " / "
+        + esc(coverage["requested"])
+        + " ports observed; "
+        + esc(coverage["unscanned"])
+        + " unscanned; "
+        + esc(coverage["open_checks_pending"])
+        + " open-port checks pending.",
+        "",
+        "> **Not a confirmed vulnerability assessment.** Open ports, missing"
+        " headers and banner-version matches require owner review. Cancelled"
+        " runs are incomplete. A clean report does not prove security.",
+        "",
+        "## All probed ports",
+        "",
+        "| Port | State | Connect ms | Service | HTTP | Missing headers | Detail |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in report["results"]:
+        service = row.get("service") or {}
+        http = row.get("http") or {}
+        detail = row.get("check_note") or row.get("note") or row.get("error") or ""
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    esc(row["port"]),
+                    esc(row["state"]),
+                    esc(row.get("connect_ms", "")),
+                    esc(service.get("name", "")),
+                    esc(http.get("response_status", http.get("status", ""))),
+                    esc("; ".join(http.get("missing_headers", []))),
+                    esc(detail),
+                ]
+            )
+            + " |"
+        )
+    open_rows = [r for r in report["results"] if r["state"] == "open"]
+    if open_rows:
+        lines += ["", "## Open port detail", ""]
+    for row in open_rows:
+        service = row.get("service", {})
+        lines.append("### " + esc(row["port"]) + " / TCP / open")
+        lines.append("")
+        lines.append(
+            "- **Service:** "
+            + esc(service.get("name", "not checked"))
+            + " — "
+            + esc(service.get("basis", "TCP connection observation"))
+        )
+        if row.get("check_note"):
+            lines.append("- **Check coverage:** " + esc(row["check_note"]))
+        h = row.get("http")
+        if h:
+            lines.append(
+                "- **HTTP result:** " + esc(h.get("response_status", h["status"]))
+            )
+            if h.get("server_header"):
+                lines.append(
+                    "- **Unverified Server header:** " + esc(h["server_header"])
+                )
+            for v in h.get("missing_headers", []):
+                lines.append("- **Missing header / review item:** " + esc(v))
+        t = row.get("tls")
+        if t:
+            lines.append("- **TLS result:** " + esc(t["status"]))
+            if t.get("expires"):
+                lines.append("- **Certificate expires:** " + esc(t["expires"]))
+        if row.get("banner"):
+            lines.append(
+                "- **Unverified greeting text:** "
+                + esc(row["banner"].get("text", row["banner"]["status"]))
+            )
+        lines.append("")
+    lines += [
+        "---",
+        "",
+        "_Markdown export includes all observed port states, like the JSON and"
+        " CSV exports. Reports can contain private data; share only within"
+        " permission and use the owner's responsible-disclosure channel._",
+        "",
+    ]
+    return "\n".join(lines)
