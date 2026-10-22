@@ -208,13 +208,13 @@ def render_md(report):
     """Markdown report for pasting into issues/docs. Every remote string is
     flattened to one line and pipe-escaped so table cells cannot break out."""
     def esc(x):
-        s = str(x)
-        return (
-            s.replace("\\", "\\\\")
-            .replace("|", "\\|")
-            .replace("\r", " ")
-            .replace("\n", " ")
-        )
+        # Observation text is data, not Markdown or inline HTML. Escaping
+        # pipes alone lets banners inject links, emphasis and HTML elements.
+        s = html.escape(str(x), quote=False)
+        s = s.replace("\\", "\\\\").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+        for char in "`*_{}[]()#+!|~":
+            s = s.replace(char, "\\" + char)
+        return s
 
     scope = report["scope"]
     summary = report["summary"]
@@ -281,7 +281,7 @@ def render_md(report):
         lines.append(
             "- **Service:** "
             + esc(service.get("name", "not checked"))
-            + " — "
+            + " - "
             + esc(service.get("basis", "TCP connection observation"))
         )
         if row.get("check_note"):
