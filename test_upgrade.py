@@ -450,3 +450,33 @@ def test_md_export(tmp_path, monkeypatch):
         assert render_md(report) == text
         # 404 path
         assert client.get("/api/jobs/nope/report.md").status_code == 404
+
+
+
+def test_markdown_observations_cannot_inject_html_or_links():
+    from reports import render_md
+
+    hostile = '<img src=x onerror=alert(1)> [click](https://example.invalid) **bold** `code` & |\nnext'
+    report = {
+        "created_utc": "2026-10-22", "version": "test",
+        "scope": {"target": hostile, "selected_address": "127.0.0.1"},
+        "status": "done", "summary": {"open": 1, "closed": 0, "timeout": 0, "error": 0},
+        "coverage": {"completed": 1, "requested": 1, "unscanned": 0, "open_checks_pending": 0},
+        "results": [{"port": 80, "state": "open", "note": hostile,
+                     "service": {"name": hostile, "basis": hostile},
+                     "http": {"status": "observed", "server_header": hostile},
+                     "banner": {"status": "observed", "text": hostile}}],
+    }
+    text = render_md(report)
+    assert "<img" not in text
+    assert "&lt;img" in text
+    assert "[click](" not in text
+    assert r"\[click\]\(https://example.invalid\)" in text
+    assert r"\*\*bold\*\*" in text
+    assert r"\`code\`" in text
+    assert "&amp;" in text
+    assert r"\| next" in text
+    # Generated structure remains Markdown; only observation text is escaped.
+    assert "# ScopeCheck evidence report" in text
+    assert "| Port | State |" in text
+    assert "### 80 / TCP / open" in text
