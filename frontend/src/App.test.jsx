@@ -88,6 +88,73 @@ describe("full-range local workbench", () => {
   });
 });
 
+it("downloads the CSV and Markdown reports from the results view", async () => {
+  const report = {
+    scope: {
+      target: "127.0.0.1",
+      selected_address: "127.0.0.1",
+      own_machine: true,
+    },
+    status: "completed",
+    configuration: { ignored_manual_ports: [] },
+    summary: { open: 0, closed: 1, timeout: 0, error: 0 },
+    coverage: {
+      completed: 1,
+      requested: 1,
+      unscanned: 0,
+      open_checks_pending: 0,
+    },
+    results: [],
+    limits: [],
+  };
+  const f = vi.fn().mockImplementation(async (url, opts) => ({
+    ok: true,
+    json: async () =>
+      url.endsWith("/local-addresses")
+        ? { addresses: ["127.0.0.1"] }
+        : url.endsWith("/history")
+          ? { reports: [] }
+          : url.endsWith("/health")
+            ? {}
+            : url.endsWith("/jobs") && opts
+              ? { id: "fast" }
+              : url.endsWith("/report")
+                ? report
+                : { id: "fast", status: "completed" },
+    text: async () =>
+      url.endsWith("report.csv") ? "csv,report\n" : "# Markdown report\n",
+  }));
+  vi.stubGlobal("fetch", f);
+  const createObjectURL = vi.fn(() => "blob:report");
+  const revokeObjectURL = vi.fn();
+  vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+  const downloads = [];
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(function () {
+      downloads.push({ href: this.href, download: this.download });
+    });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Start scope check/ }));
+  await screen.findByRole("button", { name: "CSV ↓" });
+  fireEvent.click(screen.getByRole("button", { name: "CSV ↓" }));
+  await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+  expect(
+    f.mock.calls.some(([url]) => url === "/api/jobs/fast/report.csv"),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "MD ↓" }));
+  await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
+  expect(f.mock.calls.some(([url]) => url === "/api/jobs/fast/report.md")).toBe(
+    true,
+  );
+  expect(downloads).toEqual([
+    { href: "blob:report", download: "scopecheck-report.csv" },
+    { href: "blob:report", download: "scopecheck-report.md" },
+  ]);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  click.mockRestore();
+});
+
 it("keeps a fast completed job report through the busy-state transition", async () => {
   const report = {
     scope: {
