@@ -152,11 +152,11 @@ export function App() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(u), 1000);
   }
-  async function htmlReport() {
+  async function textReport(path, type, name) {
     try {
-      const r = await fetch("/api/jobs/" + job.id + "/html");
+      const r = await fetch("/api/jobs/" + job.id + "/" + path);
       if (!r.ok) throw Error("Report not ready");
-      download(await r.text(), "text/html", "scopecheck-report.html");
+      download(await r.text(), type, name);
     } catch (e) {
       setError(e.message);
     }
@@ -561,7 +561,40 @@ export function App() {
                     >
                       JSON ↓
                     </button>
-                    <button className="outline" onClick={htmlReport}>
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        textReport(
+                          "report.csv",
+                          "text/csv",
+                          "scopecheck-report.csv",
+                        )
+                      }
+                    >
+                      CSV ↓
+                    </button>
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        textReport(
+                          "report.md",
+                          "text/markdown",
+                          "scopecheck-report.md",
+                        )
+                      }
+                    >
+                      MD ↓
+                    </button>
+                    <button
+                      className="outline"
+                      onClick={() =>
+                        textReport(
+                          "html",
+                          "text/html",
+                          "scopecheck-report.html",
+                        )
+                      }
+                    >
                       HTML ↓
                     </button>
                     <button
