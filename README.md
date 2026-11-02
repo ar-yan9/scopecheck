@@ -156,6 +156,7 @@ Do not access private data, threaten a company or demand payment.
 
 - https://httpd.apache.org/security/vulnerabilities_24.html
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.51
+- http://nginx.org/en/security_advisories.html
 
-Rules reviewed against these official records on 16 October 2026. Two exact
+Rules reviewed against these official records on 2 November 2026. Three exact
 rules do not imply coverage of other products or newer advisories.
