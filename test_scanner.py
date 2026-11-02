@@ -37,6 +37,14 @@ def test_advisory_exact_not_prefix():
     assert version_hints('Apache/2.4.50')[0]['advisories']==['CVE-2021-42013']
     for version in ['Apache/2.4.490','Apache/2.4.51','nginx/1.0','Apache/2.4.49.1']:
         assert version_hints(version)==[]
+def test_advisory_nginx_range():
+    assert version_hints('nginx/1.18.0')[0]['advisories']==['CVE-2021-23017']
+    assert version_hints('nginx/1.18.0')[0]['product']=='nginx'
+    assert version_hints('nginx/1.18.0')[0]['kind']=='possible_version_match'
+    assert version_hints('nginx/1.20.0')[0]['advisories']==['CVE-2021-23017']
+    assert version_hints('nginx/0.6.18')[0]['advisories']==['CVE-2021-23017']
+    for version in ['nginx/1.20.1','nginx/1.21.0','nginx/0.6.17','nginx/1.18.02.1','nginx/1.18','nginx']:
+        assert version_hints(version)==[]
 class Demo(BaseHTTPRequestHandler):
     server_version='Apache/2.4.49'
     sys_version='TEST-FIXTURE'
