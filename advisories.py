@@ -3,19 +3,22 @@ import re
 
 APACHE_SOURCE='https://httpd.apache.org/security/vulnerabilities_24.html'
 NGINX_SOURCE='http://nginx.org/en/security_advisories.html'
-REVIEWED='2026-11-02'
+REVIEWED='2026-11-10'
 
 _NOTE=('Unverified Server header only. This may be a spoofed banner or a patched build. '
       'Configuration and vendor patch status must be verified by the owner. No exploit request was sent.')
 
+_APACHE_RULES={'2.4.49':['CVE-2021-41773','CVE-2021-42013'],
+               '2.4.50':['CVE-2021-42013'],
+               '2.4.51':['CVE-2021-44790'],
+               '2.4.52':['CVE-2022-22720']}
+
 def _apache(server):
-    match=re.search(r'\bApache/(2\.4\.(?:49|50))(?![\d.])',server or '',re.I)
+    match=re.search(r'\bApache/(2\.4\.(?:49|50|51|52))(?![\d.])',server or '',re.I)
     if not match:return None
     version=match.group(1)
-    ids=['CVE-2021-42013']
-    if version=='2.4.49':ids.insert(0,'CVE-2021-41773')
     return {'kind':'possible_version_match','product':'Apache HTTP Server','reported_version':version,
-            'advisories':ids,'source':APACHE_SOURCE,'reviewed':REVIEWED,'note':_NOTE}
+            'advisories':list(_APACHE_RULES[version]),'source':APACHE_SOURCE,'reviewed':REVIEWED,'note':_NOTE}
 
 def _nginx(server):
     match=re.search(r'\bnginx/(\d+)\.(\d+)\.(\d+)(?![\d.])',server or '',re.I)
