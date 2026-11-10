@@ -64,8 +64,9 @@ On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python`.
   complete supported-protocol/cipher audit. Private CA failures need owner review.
 - Passive greetings: maximum 256 bytes, control characters removed, no payload.
   Text can be misleading or sensitive. Port number alone does not prove service.
-- Two Apache advisory hints: reported 2.4.49 maps to CVE-2021-41773/42013;
-  2.4.50 maps to CVE-2021-42013. Offline exact rules, not a full/live CVE feed.
+- Four Apache advisory hints: reported 2.4.49 maps to CVE-2021-41773/42013;
+  2.4.50 maps to CVE-2021-42013; 2.4.51 maps to CVE-2021-44790; 2.4.52 maps to
+  CVE-2022-22720. Offline exact rules, not a full/live CVE feed.
   Spoofing, patches and configuration require review. No exploit is attempted.
 - Search, state filters, pagination, row details and raw observations. Remote
   text is escaped. JSON export includes all observed states; self-contained HTML
@@ -156,7 +157,9 @@ Do not access private data, threaten a company or demand payment.
 
 - https://httpd.apache.org/security/vulnerabilities_24.html
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.51
+- https://archive.apache.org/dist/httpd/CHANGES_2.4.52
+- https://archive.apache.org/dist/httpd/CHANGES_2.4.53
 - http://nginx.org/en/security_advisories.html
 
-Rules reviewed against these official records on 2 November 2026. Three exact
+Rules reviewed against these official records on 10 November 2026. Five exact
 rules do not imply coverage of other products or newer advisories.
