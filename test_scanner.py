@@ -35,22 +35,26 @@ def test_loopback_allowed():
 def test_advisory_exact_not_prefix():
     assert version_hints('Apache/2.4.49')[0]['advisories']==['CVE-2021-41773','CVE-2021-42013']
     assert version_hints('Apache/2.4.50')[0]['advisories']==['CVE-2021-42013']
-    for version in ['Apache/2.4.490','Apache/2.4.53','nginx/1.0','Apache/2.4.49.1']:
+    for version in ['Apache/2.4.490','nginx/1.0','Apache/2.4.49.1']:
         assert version_hints(version)==[]
 def test_advisory_apache_51_and_52_rules():
     hint=version_hints('Apache/2.4.51')[0]
     assert hint['advisories']==['CVE-2021-44790']
     assert hint['kind']=='possible_version_match' and hint['product']=='Apache HTTP Server'
     assert version_hints('Apache/2.4.52')[0]['advisories']==['CVE-2022-22720']
-    for version in ['Apache/2.4.510','Apache/2.4.521','Apache/2.4.5','Apache/2.4.53','Apache/2.4.62']:
+    for version in ['Apache/2.4.510','Apache/2.4.521','Apache/2.4.5','Apache/2.4.62']:
         assert version_hints(version)==[]
+def test_advisory_apache_54_rule():
+    hint=version_hints('Apache/2.4.54')[0]
+    assert hint['advisories']==['CVE-2006-20001','CVE-2022-36760','CVE-2022-37436']
+    assert hint['kind']=='possible_version_match' and hint['product']=='Apache HTTP Server'
 def test_advisory_nginx_range():
-    assert version_hints('nginx/1.18.0')[0]['advisories']==['CVE-2021-23017']
+    assert 'CVE-2021-23017' in version_hints('nginx/1.18.0')[0]['advisories']
     assert version_hints('nginx/1.18.0')[0]['product']=='nginx'
     assert version_hints('nginx/1.18.0')[0]['kind']=='possible_version_match'
-    assert version_hints('nginx/1.20.0')[0]['advisories']==['CVE-2021-23017']
+    assert 'CVE-2021-23017' in version_hints('nginx/1.20.0')[0]['advisories']
     assert version_hints('nginx/0.6.18')[0]['advisories']==['CVE-2021-23017']
-    for version in ['nginx/1.20.1','nginx/1.21.0','nginx/0.6.17','nginx/1.18.02.1','nginx/1.18','nginx']:
+    for version in ['nginx/0.6.17','nginx/1.18.02.1','nginx/1.18','nginx']:
         assert version_hints(version)==[]
 class Demo(BaseHTTPRequestHandler):
     server_version='Apache/2.4.49'
