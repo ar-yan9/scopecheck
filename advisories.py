@@ -11,10 +11,11 @@ _NOTE=('Unverified Server header only. This may be a spoofed banner or a patched
 _APACHE_RULES={'2.4.49':['CVE-2021-41773','CVE-2021-42013'],
                '2.4.50':['CVE-2021-42013'],
                '2.4.51':['CVE-2021-44790'],
-               '2.4.52':['CVE-2022-22720']}
+               '2.4.52':['CVE-2022-22720'],
+               '2.4.54':['CVE-2006-20001','CVE-2022-36760','CVE-2022-37436']}
 
 def _apache(server):
-    match=re.search(r'\bApache/(2\.4\.(?:49|50|51|52))(?![\d.])',server or '',re.I)
+    match=re.search(r'\bApache/(2\.4\.(?:49|50|51|52|54))(?![\d.])',server or '',re.I)
     if not match:return None
     version=match.group(1)
     return {'kind':'possible_version_match','product':'Apache HTTP Server','reported_version':version,
@@ -25,8 +26,9 @@ def _nginx(server):
     if not match:return None
     version=tuple(int(g) for g in match.groups())
     if not (0,6,18)<=version<=(1,20,0):return None
+    advisories=['CVE-2021-23017']
     return {'kind':'possible_version_match','product':'nginx','reported_version':'.'.join(match.groups()),
-            'advisories':['CVE-2021-23017'],'source':NGINX_SOURCE,'reviewed':REVIEWED,'note':_NOTE}
+            'advisories':advisories,'source':NGINX_SOURCE,'reviewed':REVIEWED,'note':_NOTE}
 
 def version_hints(server):
     hints=[]
