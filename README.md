@@ -64,10 +64,17 @@ On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python`.
   complete supported-protocol/cipher audit. Private CA failures need owner review.
 - Passive greetings: maximum 256 bytes, control characters removed, no payload.
   Text can be misleading or sensitive. Port number alone does not prove service.
-- Four Apache advisory hints: reported 2.4.49 maps to CVE-2021-41773/42013;
+- Six Apache advisory hints: reported 2.4.49 maps to CVE-2021-41773/42013;
   2.4.50 maps to CVE-2021-42013; 2.4.51 maps to CVE-2021-44790; 2.4.52 maps to
-  CVE-2022-22720. Offline exact rules, not a full/live CVE feed.
-  Spoofing, patches and configuration require review. No exploit is attempted.
+  CVE-2022-22720; 2.4.53 maps to eight CVEs fixed in 2.4.54 (CVE-2022-26377,
+  CVE-2022-28330, CVE-2022-28614, CVE-2022-28615, CVE-2022-29404,
+  CVE-2022-30522, CVE-2022-30556, CVE-2022-31813); 2.4.54 maps to
+  CVE-2006-20001, CVE-2022-36760 and CVE-2022-37436 fixed in 2.4.55.
+  nginx 0.6.18-1.20.0 hints CVE-2021-23017; nginx 1.0.7-1.0.15 and
+  1.1.3-1.23.1 hint CVE-2022-41741/41742 (affect builds with the
+  ngx_http_mp4_module enabled only). Offline exact rules, not a full/live
+  CVE feed. Spoofing, patches and configuration require review. No exploit
+  is attempted.
 - Search, state filters, pagination, row details and raw observations. Remote
   text is escaped. JSON export includes all observed states; self-contained HTML
   and its Print/PDF view include every open port independent of the UI filter.
@@ -159,7 +166,9 @@ Do not access private data, threaten a company or demand payment.
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.51
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.52
 - https://archive.apache.org/dist/httpd/CHANGES_2.4.53
+- https://archive.apache.org/dist/httpd/CHANGES_2.4.54
+- https://archive.apache.org/dist/httpd/CHANGES_2.4.55
 - http://nginx.org/en/security_advisories.html
 
-Rules reviewed against these official records on 10 November 2026. Five exact
+Rules reviewed against these official records on 17 November 2026. Eight exact
 rules do not imply coverage of other products or newer advisories.
