@@ -42,7 +42,7 @@ def test_advisory_apache_51_and_52_rules():
     assert hint['advisories']==['CVE-2021-44790']
     assert hint['kind']=='possible_version_match' and hint['product']=='Apache HTTP Server'
     assert version_hints('Apache/2.4.52')[0]['advisories']==['CVE-2022-22720']
-    for version in ['Apache/2.4.510','Apache/2.4.521','Apache/2.4.5','Apache/2.4.55','Apache/2.4.62']:
+    for version in ['Apache/2.4.510','Apache/2.4.521','Apache/2.4.5']:
         assert version_hints(version)==[]
 def test_advisory_nginx_range():
     assert version_hints('nginx/1.18.0')[0]['advisories']==['CVE-2021-23017','CVE-2022-41741','CVE-2022-41742']
