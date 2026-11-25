@@ -59,6 +59,20 @@ def test_advisory_apache_53_and_54_rules():
     assert version_hints('Apache/2.4.54')[0]['advisories']==['CVE-2006-20001','CVE-2022-36760','CVE-2022-37436']
     for version in ['Apache/2.4.530','Apache/2.4.541','Apache/2.4.5300']:
         assert version_hints(version)==[]
+def test_advisory_apache_55_through_70_rules():
+    assert version_hints('Apache/2.4.55')[0]['advisories']==['CVE-2026-119618','CVE-2026-106023','CVE-2026-42528','CVE-2026-57941','CVE-2026-59685','CVE-2026-63292','CVE-2026-93546','CVE-2026-46729','CVE-2026-47360','CVE-2026-48005','CVE-2026-56153','CVE-2026-56154','CVE-2026-58415','CVE-2026-59797','CVE-2026-63045','CVE-2026-63686','CVE-2026-63718','CVE-2026-73636','CVE-2026-73637','CVE-2026-79768','CVE-2026-34355','CVE-2026-42535','CVE-2026-43951','CVE-2026-44119','CVE-2026-44186','CVE-2026-49975','CVE-2026-29167','CVE-2026-29170','CVE-2026-34356','CVE-2026-42536','CVE-2026-44185','CVE-2026-44631','CVE-2026-48913','CVE-2026-24072','CVE-2026-33006','CVE-2026-28780','CVE-2026-29168','CVE-2026-29169','CVE-2026-33007','CVE-2026-33523','CVE-2026-33857','CVE-2026-34032','CVE-2026-34059','CVE-2025-59775','CVE-2025-66200','CVE-2025-65082','CVE-2024-42516','CVE-2024-43394','CVE-2025-23048','CVE-2025-49812','CVE-2025-53020','CVE-2024-43204','CVE-2025-49630','CVE-2024-40898','CVE-2024-38472','CVE-2024-38474','CVE-2024-38475','CVE-2024-38476','CVE-2024-38477','CVE-2024-38473','CVE-2024-39573','CVE-2024-36387','CVE-2023-38709','CVE-2024-27316','CVE-2025-58098','CVE-2025-55753','CVE-2024-47252','CVE-2024-24795']
+    assert version_hints('Apache/2.4.60')[0]['advisories']==['CVE-2026-119618','CVE-2026-106023','CVE-2026-42528','CVE-2026-57941','CVE-2026-59685','CVE-2026-63292','CVE-2026-93546','CVE-2026-42356','CVE-2026-46729','CVE-2026-47360','CVE-2026-48005','CVE-2026-56153','CVE-2026-56154','CVE-2026-58415','CVE-2026-59797','CVE-2026-63045','CVE-2026-63686','CVE-2026-63718','CVE-2026-73636','CVE-2026-73637','CVE-2026-79768','CVE-2026-34355','CVE-2026-42535','CVE-2026-43951','CVE-2026-44119','CVE-2026-44186','CVE-2026-49975','CVE-2026-29167','CVE-2026-29170','CVE-2026-34356','CVE-2026-42536','CVE-2026-44185','CVE-2026-44631','CVE-2026-48913','CVE-2026-24072','CVE-2026-33006','CVE-2026-28780','CVE-2026-29168','CVE-2026-29169','CVE-2026-33007','CVE-2026-33523','CVE-2026-33857','CVE-2026-34032','CVE-2026-34059','CVE-2025-59775','CVE-2025-66200','CVE-2025-65082','CVE-2024-42516','CVE-2024-43394','CVE-2025-23048','CVE-2025-49812','CVE-2025-53020','CVE-2024-43204','CVE-2025-49630','CVE-2024-40725','CVE-2024-40898','CVE-2024-39884','CVE-2025-58098','CVE-2025-55753','CVE-2024-47252']
+    assert version_hints('Apache/2.4.69')[0]['advisories']==['CVE-2026-119618','CVE-2026-106023','CVE-2026-109163']
+    assert version_hints('Apache/2.4.70')[0]['advisories']==['CVE-2026-119618','CVE-2026-106023','CVE-2026-109163']
+    hint=version_hints('Apache/2.4.66')[0]
+    assert hint['kind']=='possible_version_match' and hint['product']=='Apache HTTP Server'
+    assert 'CVE-2026-23918' in hint['advisories'] and 'CVE-2026-56449' not in hint['advisories']
+    assert 'CVE-2024-39884' in version_hints('Apache/2.4.60')[0]['advisories']
+    assert 'CVE-2024-39884' not in version_hints('Apache/2.4.61')[0]['advisories']
+    assert 'CVE-2024-24795' in version_hints('Apache/2.4.58')[0]['advisories']
+    assert 'CVE-2024-24795' not in version_hints('Apache/2.4.59')[0]['advisories']
+    for version in ['Apache/2.4.71','Apache/2.4.550','Apache/2.4.700','Apache/2.4.691','Apache/2.5.0']:
+        assert version_hints(version)==[]
 def test_advisory_nginx_mp4_range():
     for version in ['nginx/1.20.1','nginx/1.21.0','nginx/1.22.0','nginx/1.23.1']:
         assert version_hints(version)[0]['advisories']==['CVE-2022-41741','CVE-2022-41742']
