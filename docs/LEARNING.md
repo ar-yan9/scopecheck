@@ -22,7 +22,7 @@
   Frontend: React browser UI. JSON: structured text format jo dono exchange karte.
 - CVE: published vulnerability identifier, severity score nahi. Version match
   se actual vulnerability prove nahi hoti. Patch backports banner change bina bhi
-  vulnerability fix kar sakte hain. Is version me sirf 2 Apache advisory hints hain.
+  vulnerability fix kar sakte hain. Is version me 22 Apache version advisory hints hain (2.4.49 se 2.4.70 tak).
 
 ## Ek tiny connect example, line by line
 
@@ -60,7 +60,7 @@ remote strings data hain, instructions nahi. React unhe escaped text me dikhata.
 6. HTTP HEAD checker likh: fixed path, header cap + deadline, no redirect, cookie flags only, no values. Checkpoint: local 302 fixture follow nahi hota, missing headers review.
 7. Verified TLS checker add kar. Checkpoint: generated localhost CA/cert works;
    wrong trust pe stop, insecure fallback nahi.
-8. `advisories.py` padh: 2 exact rules, official source, possible-only label.
+8. `advisories.py` padh: exact version rules, official source, possible-only label.
    Khud rules add karne se pehle vendor affected-version record verify kar.
 9. FastAPI model/gates + one-active-scan lock. Checkpoint: Origin/Host/permission
    fail; local valid request work. Public deploy abhi nahi.
